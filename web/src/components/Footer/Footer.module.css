@@ -1,0 +1,70 @@
+.footer {
+  border-top: 1px solid var(--line);
+  margin-top: var(--sp-16);
+  background: var(--surface);
+}
+
+.inner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-8) var(--sp-6);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: var(--sp-6);
+}
+
+.brand {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  max-width: 340px;
+}
+
+.brandTag {
+  font-size: var(--fs-12);
+  color: var(--slate);
+}
+
+.columns {
+  display: flex;
+  gap: var(--sp-12);
+  flex-wrap: wrap;
+}
+
+.column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.columnHeading {
+  font-size: var(--fs-12);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-soft);
+  margin-bottom: var(--sp-1);
+}
+
+.columnLink {
+  font-size: var(--fs-14);
+  color: var(--slate);
+}
+
+.columnLink:hover {
+  color: var(--primary);
+  text-decoration: underline;
+}
+
+.legal {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-4) var(--sp-6) var(--sp-8);
+  font-size: var(--fs-12);
+  color: var(--slate-soft);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2) var(--sp-4);
+  border-top: 1px solid var(--line);
+}

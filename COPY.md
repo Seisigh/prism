@@ -177,3 +177,91 @@ Followed by the generated field table from the event schema, so the page cannot 
 | item | product, SKU, listing |
 
 "Anonymous" is the important one. The data is pseudonymous, mouse dynamics are re-identifiable in principle, and claiming anonymity would be a false statement rather than a loose one.
+
+---
+
+## 11. Additional interface copy (added during build)
+
+Strings the original brief didn't cover, written in this file's voice per
+the build instructions, and kept here so they stay auditable in one place
+rather than scattered inline in components.
+
+### 11.1 Home hero carousel
+
+**Slide 1**
+> Instrumented catalog
+> Every item here is being measured
+> PRISM turns how you browse into a live interest profile. Nothing on this page is for sale.
+> `[See what gets recorded]`
+
+**Slide 2**
+> 750 items, ten interests
+> Browse like it's a real store, because the structure is
+> Categories, search and filtering work like a real storefront. Prices, ratings and reviews are generated for the study.
+> `[Start browsing]`
+
+**Slide 3**
+> Your profile, visible
+> Watch your own profile take shape
+> Open the profile panel any time to see PRISM's live read on what you're interested in.
+> `[Open your profile]`
+
+### 11.2 Home category cards
+
+> Under $25
+> Small enough to not think twice about
+
+> Rated 4.5 and up
+> The items that held up under their own reviews
+
+> New in Outdoor & Garden
+> Recently added to the catalog
+
+> For people with pets
+> Across food, toys and everyday supplies
+
+### 11.3 Rail titles
+
+- "Popular right now" (home, popularity fallback rail)
+- "Customers also viewed" (detail page)
+- "Similar items" (detail page)
+- `Popular in {category}` (fallback, already in §4)
+
+### 11.4 Buy box (product detail)
+
+> Add to cart
+> Add to list
+> In stock
+> `{n} left` (low stock)
+> Currently out of stock — check back later
+> Qty
+
+### 11.5 Compare view
+
+> Compare
+> Comparing items from the same near-substitute set. Price, rating and reviews are generated; everything else is the real listing attribute.
+> `[Remove]` (per column)
+
+### 11.6 Cart & checkout stub
+
+> Your cart
+> `{n} item(s)`
+> Subtotal
+> `[Proceed to checkout]`
+> Checkout
+> This is a stub. No payment is collected and nothing is charged.
+> `[Place order]`
+> Order confirmed
+> This didn't charge you anything — checkout is a stub. Thanks for trying PRISM.
+> `[Continue browsing]`
+
+### 11.7 Item detail — synthetic content marker
+
+Same marker as reviews (§3), shown once near price:
+> Price, rating and stock are fabricated for this research prototype
+
+### 11.8 404 / item not found page action
+
+Reuses §6 "Item not found" copy verbatim; the "Back to browsing" link
+points to `/`.
+

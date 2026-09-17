@@ -6,6 +6,12 @@ data/raw/
 data/images/
 data/thumbs/
 catalog/downloads/
+# Generated catalog build artifact (data + brand/price/rating text), fully
+# reproducible via `python -m catalog.build`. Same "commit the pipeline,
+# not its output" reasoning as the two rules above. Added during the
+# catalog pipeline build — not part of the original file.
+data/catalog.json
+data/spotcheck_*.png
 
 # Structural reference screenshots of a third-party retailer.
 # Local reference only. These must never enter a commit or a deploy.
@@ -46,6 +52,7 @@ dist/
 test-results/
 playwright-report/
 blob-report/
+.playwright-mcp/
 
 # OS and editor
 .DS_Store

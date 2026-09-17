@@ -1,0 +1,37 @@
+.banner {
+  background: var(--ink);
+  color: var(--surface);
+  font-size: var(--fs-12);
+  padding: var(--sp-2) var(--sp-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sp-3);
+  text-align: center;
+  position: relative;
+}
+
+.text {
+  color: rgba(255, 255, 255, 0.86);
+}
+
+.dismiss {
+  position: absolute;
+  right: var(--sp-3);
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  padding: var(--sp-1);
+  border-radius: var(--radius-sm);
+  transition: background-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out);
+}
+
+.dismiss:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--surface);
+}

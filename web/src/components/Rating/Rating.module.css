@@ -1,0 +1,36 @@
+.rating {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-12);
+  color: var(--slate);
+}
+
+.stars {
+  display: inline-flex;
+  align-items: center;
+  position: relative;
+  color: var(--line-strong);
+}
+
+.starsFill {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  color: var(--warning-ink);
+  white-space: nowrap;
+}
+
+.value {
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.count {
+  color: var(--slate-soft);
+}
+
+.count:hover {
+  color: var(--slate);
+}

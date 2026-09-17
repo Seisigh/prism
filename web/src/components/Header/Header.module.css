@@ -1,0 +1,142 @@
+.header {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+}
+
+.topRow {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-3) var(--sp-6);
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.logoLink {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+
+.location {
+  display: none;
+  flex-direction: column;
+  font-size: var(--fs-12);
+  color: var(--slate);
+  flex-shrink: 0;
+  padding: var(--sp-1) var(--sp-2);
+  border-radius: var(--radius-sm);
+  cursor: default;
+}
+
+.locationLabel {
+  color: var(--slate-soft);
+}
+
+.locationValue {
+  font-weight: 600;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+@media (min-width: 900px) {
+  .location {
+    display: flex;
+  }
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-shrink: 0;
+}
+
+.actionBtn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--sp-2);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font-size: 10px;
+  font-weight: 600;
+  position: relative;
+  border: 1px solid transparent;
+}
+
+.actionBtn:hover {
+  background: var(--surface-alt);
+}
+
+.cartCount {
+  position: absolute;
+  top: 0;
+  right: 2px;
+  background: var(--primary);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  min-width: 16px;
+  height: 16px;
+  border-radius: 8px;
+  display: grid;
+  place-items: center;
+  padding: 0 3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.navStripOuter {
+  position: relative;
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.navStripOuter::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 48px;
+  background: linear-gradient(to right, transparent, var(--surface));
+  pointer-events: none;
+}
+
+.navStrip {
+  padding: 0 var(--sp-6);
+  display: flex;
+  gap: var(--sp-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.navStrip::-webkit-scrollbar {
+  display: none;
+}
+
+.navLink {
+  flex-shrink: 0;
+  font-size: var(--fs-12);
+  font-weight: 500;
+  color: var(--slate);
+  padding: var(--sp-2) var(--sp-2);
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+}
+
+.navLink:hover {
+  color: var(--ink);
+}
+
+.navLink.active {
+  color: var(--ink);
+  border-bottom-color: var(--primary);
+}

@@ -1,0 +1,295 @@
+.page {
+  max-width: var(--content-max);
+  margin: 0 auto;
+  padding: var(--sp-6);
+}
+
+.breadcrumb {
+  font-size: var(--fs-12);
+  color: var(--slate-soft);
+  margin-bottom: var(--sp-4);
+}
+
+.breadcrumb a:hover {
+  color: var(--primary);
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) 300px;
+  gap: var(--sp-8);
+  align-items: start;
+  margin-bottom: var(--sp-12);
+}
+
+.infoCol {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.brand {
+  font-size: var(--fs-12);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.title {
+  font-size: var(--fs-24);
+}
+
+.syntheticNotice {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-1);
+  font-size: var(--fs-12);
+  color: var(--slate-soft);
+  background: var(--surface-alt);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-1) var(--sp-2);
+  width: fit-content;
+}
+
+.priceBlock {
+  padding-top: var(--sp-2);
+  border-top: 1px solid var(--line);
+}
+
+.badgeRow {
+  display: flex;
+  gap: var(--sp-2);
+}
+
+.badge {
+  background: var(--ink);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  width: fit-content;
+}
+
+.bulletList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  margin-top: var(--sp-2);
+}
+
+.bulletItem {
+  display: flex;
+  gap: var(--sp-2);
+  font-size: var(--fs-14);
+  color: var(--slate);
+  max-width: var(--measure);
+}
+
+.bulletDot {
+  color: var(--primary);
+  flex-shrink: 0;
+}
+
+/* Buy box */
+.buyBox {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  position: sticky;
+  top: calc(var(--header-h) + var(--sp-4));
+}
+
+.buyBoxRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-14);
+}
+
+.deliveryLine {
+  font-size: var(--fs-14);
+  color: var(--ink);
+}
+
+.stockLine {
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+.stockLine.inStock {
+  color: var(--savings);
+}
+
+.stockLine.low {
+  color: var(--warning-ink);
+}
+
+.stockLine.out {
+  color: var(--danger);
+}
+
+.qtyRow {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.qtySelect {
+  appearance: none;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-1) var(--sp-6) var(--sp-1) var(--sp-3);
+  font-size: var(--fs-14);
+  background-image: linear-gradient(45deg, transparent 50%, var(--slate) 50%), linear-gradient(135deg, var(--slate) 50%, transparent 50%);
+  background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.buyBoxActions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* Sections below the fold */
+.section {
+  margin-bottom: var(--sp-12);
+  max-width: 900px;
+}
+
+.sectionTitle {
+  font-size: var(--fs-20);
+  margin-bottom: var(--sp-4);
+}
+
+.specTable {
+  border-top: 1px solid var(--line);
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.specRow {
+  border-bottom: 1px solid var(--line);
+}
+
+.specRow td {
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-14);
+}
+
+.specRow td:first-child {
+  color: var(--slate);
+  width: 200px;
+}
+
+.specRow:nth-child(odd) {
+  background: var(--surface-alt);
+}
+
+/* Reviews */
+.reviewsLayout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  gap: var(--sp-8);
+}
+
+.histogram {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.histogramSummary {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.histogramSummaryValue {
+  font-size: var(--fs-32);
+  font-variant-numeric: tabular-nums;
+}
+
+.histogramRow {
+  display: grid;
+  grid-template-columns: 40px 1fr 32px;
+  align-items: center;
+  gap: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--slate);
+}
+
+.histogramTrack {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.histogramFill {
+  height: 100%;
+  background: var(--warning-ink);
+  border-radius: 4px;
+}
+
+.reviewList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.reviewItem {
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.reviewMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+}
+
+.reviewBody {
+  font-size: var(--fs-14);
+  color: var(--ink);
+  max-width: var(--measure);
+  margin-bottom: var(--sp-2);
+}
+
+.reviewSyntheticMarker {
+  font-size: var(--fs-12);
+  color: var(--slate-soft);
+  font-style: italic;
+}
+
+.rail {
+  margin-bottom: var(--sp-12);
+}
+
+.railTitle {
+  font-size: var(--fs-20);
+  margin-bottom: var(--sp-4);
+}
+
+@media (max-width: 1100px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+  .buyBox {
+    position: static;
+  }
+}
+
+@media (max-width: 768px) {
+  .reviewsLayout {
+    grid-template-columns: 1fr;
+  }
+}

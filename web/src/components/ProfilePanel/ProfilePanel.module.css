@@ -1,0 +1,166 @@
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 22, 28, 0.32);
+  z-index: var(--z-modal);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-base) var(--ease-out);
+}
+
+.overlay.open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(400px, 100vw);
+  background: var(--surface);
+  z-index: var(--z-modal);
+  box-shadow: var(--shadow-2);
+  transform: translateX(100%);
+  transition: transform var(--dur-slow) var(--ease-out);
+  display: flex;
+  flex-direction: column;
+}
+
+.panel.open {
+  transform: translateX(0);
+}
+
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--sp-4) var(--sp-4) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+}
+
+.headingWrap {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.spectrumDot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--spectrum-1),
+    var(--spectrum-2),
+    var(--spectrum-3),
+    var(--spectrum-4),
+    var(--spectrum-5),
+    var(--spectrum-6),
+    var(--spectrum-1)
+  );
+}
+
+.heading {
+  font-size: var(--fs-16);
+}
+
+.closeBtn {
+  border: none;
+  background: transparent;
+  color: var(--slate);
+  cursor: pointer;
+  padding: var(--sp-1);
+  border-radius: var(--radius-sm);
+  display: grid;
+  place-items: center;
+}
+
+.closeBtn:hover {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--sp-4);
+}
+
+.emptyState {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-3);
+  padding-top: var(--sp-8);
+}
+
+.emptyIcon {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: conic-gradient(
+    from 0deg,
+    var(--spectrum-1),
+    var(--spectrum-2),
+    var(--spectrum-3),
+    var(--spectrum-4),
+    var(--spectrum-5),
+    var(--spectrum-6),
+    var(--spectrum-1)
+  );
+  opacity: 0.25;
+  margin-bottom: var(--sp-2);
+}
+
+.emptyHeading {
+  font-size: var(--fs-20);
+}
+
+.emptyBody {
+  color: var(--slate);
+  max-width: var(--measure);
+}
+
+.progressRow {
+  display: flex;
+  gap: var(--sp-1);
+  margin-top: var(--sp-2);
+}
+
+.progressDot {
+  width: 24px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-sunken);
+}
+
+.progressDot.filled {
+  background: var(--spectrum-5);
+}
+
+.dimension {
+  margin-bottom: var(--sp-4);
+}
+
+.dimensionLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-12);
+  color: var(--slate);
+  margin-bottom: var(--sp-1);
+}
+
+.dimensionTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.dimensionFill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width var(--dur-slow) var(--ease-out);
+}

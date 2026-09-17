@@ -1,0 +1,8 @@
+.notice {
+  background: var(--warning-tint);
+  color: var(--warning-ink);
+  font-size: var(--fs-12);
+  padding: var(--sp-2) var(--sp-4);
+  text-align: center;
+  border-bottom: 1px solid var(--line);
+}

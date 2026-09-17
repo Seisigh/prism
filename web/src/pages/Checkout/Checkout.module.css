@@ -1,0 +1,43 @@
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: var(--sp-12) var(--sp-6);
+}
+
+.title {
+  font-size: var(--fs-24);
+  margin-bottom: var(--sp-2);
+}
+
+.notice {
+  background: var(--surface-alt);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: var(--sp-3);
+  font-size: var(--fs-14);
+  color: var(--slate);
+  margin-bottom: var(--sp-6);
+}
+
+.summaryRow {
+  display: flex;
+  justify-content: space-between;
+  padding: var(--sp-2) 0;
+  border-bottom: 1px solid var(--line);
+  font-size: var(--fs-14);
+}
+
+.total {
+  font-weight: 700;
+  font-size: var(--fs-16);
+}
+
+.confirm {
+  text-align: center;
+  padding: var(--sp-16) 0;
+}
+
+.confirmIcon {
+  color: var(--savings);
+  margin-bottom: var(--sp-4);
+}

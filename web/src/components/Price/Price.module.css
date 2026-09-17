@@ -1,0 +1,40 @@
+.price {
+  display: inline-flex;
+  align-items: flex-start;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.symbol {
+  font-size: 0.6em;
+  margin-top: 0.15em;
+}
+
+.dollars {
+  font-size: 1em;
+  line-height: 1;
+}
+
+.cents {
+  font-size: 0.6em;
+  margin-top: 0.05em;
+}
+
+.anchor {
+  font-variant-numeric: tabular-nums;
+  color: var(--slate-soft);
+  text-decoration: line-through;
+  font-size: 0.8em;
+  margin-left: var(--sp-2);
+  font-weight: 400;
+  align-self: center;
+}
+
+.savings {
+  color: var(--savings);
+  font-size: var(--fs-12);
+  font-weight: 600;
+  margin-left: var(--sp-2);
+  align-self: center;
+}
