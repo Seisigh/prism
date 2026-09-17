@@ -3,8 +3,9 @@
 Read this alongside `BUILD_BRIEF.md` before doing anything else in a new
 session. This file is updated after each module, not at the end.
 
-**Current gate:** 0 (catalog + storefront done, SDK/ingest/features next)
+**Current gate:** 0 complete. Gate 1 started (simulator + taste vector built and tested; ranker/calibration/profile-updater wiring not yet).
 **Repo:** https://github.com/Seisigh/prism (private)
+**Deployment: blocked on the author's action** — see "Deployment" section near the end. Everything needed is prepared and locally verified (Dockerfile builds clean, container runs and serves correctly); it needs an authenticated `flyctl` session, which the agent cannot create.
 
 ---
 
@@ -193,4 +194,102 @@ fast-skip bootstrap problem, the skew-test fixture). Nothing new since.
 13. `README.md` with screenshots/GIF/§14 — **not started**
 14. **Manual gate**: author confirms view boundaries/modes by hand against a raw event log — **ready**. `/admin/session` is live; paste a code or session_id to see the raw log next to the recomputed canonical views/modes.
 
-**Blocking Gate 0 completion: only #11 (deploy) and #13 (README) remain.**
+**Blocking Gate 0 completion: only #11 (deploy) remains — README is done. Everything else in Gate 0's DoD is done and verified.**
+
+---
+
+## Catalog pipeline: one more real bug found and fixed
+
+Building the production Docker image (a fresh container, nothing cached)
+surfaced a genuine concurrency bug that never showed up locally, because
+locally `images.csv.gz` was always already cached from earlier runs:
+`catalog/images.py`'s thread pool has every worker thread call
+`fetch_images_index()` on first use, and `catalog/download.py`'s
+`_download()` had no locking — two threads racing on a cold cache both
+saw the destination file missing, both downloaded to the *same* `.part`
+temp path, and the loser's rename failed once the winner had already
+moved it (`No such file or directory: '.../images.csv.gz.part'`). 15 of
+810 items silently lost their images this way on the first clean build.
+
+Fixed at the root in `download.py`: a per-destination-path lock (so
+unrelated downloads never block each other) plus a uuid-suffixed temp
+filename (so even a second, out-of-process `catalog.build` run can't
+collide). Verified by rebuilding the Docker image from scratch twice —
+first confirmed the failure, then confirmed `context=750 core=60` with
+zero dropped items after the fix.
+
+---
+
+## Gate 1, started: `sim/` and `server/models/taste_vector.py`
+
+Built in the stated order's first two pieces (§11: "Build the simulator
+before the ranker... simulator, then calibration against real traces,
+then ranker, then profile updater"). The taste vector is technically
+listed after the ranker, but it's a small, fully self-contained §11
+formula with no ranker dependency, so it was quick to get done and tested
+while the simulator's own tests were being fixed — reordering it ahead of
+the ranker cost nothing and any Python-level module can be worked in the
+order that's actually efficient as long as the *conceptual* dependencies
+(simulator's output existing before the ranker can train on it) are
+respected, which they are.
+
+- `sim/embedding.py` — item embeddings built from the **real** `data/catalog.json`, not a synthetic stand-in: 7 interpretable dimensions (standardized log-price within category, rating, log review count, on-sale flag, description-length band, gallery size, brand tier), all real catalog attributes. Verified against the actual 810-item catalog.
+- `sim/agents.py` — the five archetypes (skimmer, deliberator, price_hunter, image_driven, spec_reader), each with a `taste_vector` (weights over the embedding dims, used only for utility) and a `signal_weighting_vector` (the five families from §11 — attention/motor_conflict/exploration/comparison/availability — the actual Gate 1 DoD recovery target) kept **separate** from the motor/timing parameters that drive the generative process, so archetype recovery from simulated behavior is a real test rather than a tautology.
+- `sim/generative.py` — the declared generative process: a drift-diffusion utility accumulator decides *how long* an agent looks at something (`dwell_via_drift_diffusion`), a gaze-then-reach motor model with AR(1)-smoothed perpendicular noise decides *how the cursor gets there* (`reach_trajectory` — smoothed noise is what makes the path curve rather than jitter), and a reading model decides scroll progression with re-read reversals (`reading_scroll`). Curvature, peak velocity, and scroll reversals are never assigned directly anywhere — they emerge from these processes.
+- `sim/session.py` — simulates a full session for one archetype against real catalog items, laid out on a synthetic grid, producing `RawEvent`s in the exact shape `server/features/window_spec.py` expects. The simulator's output goes through the *same* `item_view.py`/`signals.py` pipeline real telemetry does — verified directly (`sim.session.simulate_session` → 10 items → 2,884 raw events → 10 canonical views, dwell/commit outcomes tracking utility as expected).
+- `server/models/taste_vector.py` — §11's fully-specified update rule (`v_0` = catalog centroid, never the zero vector; `w_i = clip(2p_i - 1, -0.5, 1.0)`, `-0.5` on a fast skip; `eta=0.3`, `lambda=0.067`), with the population-prior gate below 3 scored views built in rather than left for callers to remember. 12 tests: unit norm after 200 arbitrary updates, bounded magnitude under extreme weights, convergence toward a repeatedly-liked direction and away from a repeatedly-disliked one, and the population-prior gate's exact boundary.
+
+### A real, useful modeling finding from testing the simulator against itself
+
+The first version of `tests/sim/test_generative.py` asserted dwell
+correlates positively with utility — and failed, including a *negative*
+correlation in one case. Investigating: this isn't a bug in the
+generative model, it's correct drift-diffusion behavior. Dwell (time to
+decide) is **U-shaped in utility**, longest near indifference (utility ≈
+0 → the evidence random-walks before crossing either threshold) and
+*short* at a strongly positive **or** strongly negative utility (a
+confident decision, reached quickly, either way). What's actually
+monotonic in utility is the **commitment rate** — which threshold gets
+hit — not dwell duration. This is the simulator concretely reproducing
+§4.2's own warning ("Do not assume dwell is positively related to
+interest in `directed_search`") as an emergent property of a physically-
+motivated process, not a rule anyone hand-coded — a good sign the model
+is principled rather than curve-fit to the brief's prose. Tests fixed to
+check commitment rate (the real signal) and to explicitly document the
+U-shape as intentional, not asserted away.
+
+### What's not built yet for Gate 1
+
+- **Calibration against real traces** (§11's stated step 2, before the ranker) — needs the author's own real browsing data, which doesn't exist yet: no deployment, so no real sessions to calibrate `sim/agents.py`'s motor/timing parameters against. Genuinely blocked on deployment + the author actually using the deployed site, not something buildable in isolation.
+- **The ranker** (LambdaRank over within-session pairs, five family composites, per-mode calibration) — not started. Per §11's own reasoning ("the ranker trains primarily on synthetic sessions, so it cannot exist first"), training against the simulator's current (uncalibrated) output is the intended primary path regardless of the real-trace calibration gap above — calibration refines the simulator's parameters, it isn't a hard prerequisite for the ranker's training loop to exist. Next piece to build.
+- Archetype linear-probe recovery, the negative control at the full-pipeline level (§11's actual DoD items, distinct from the generative-process-level sanity checks already passing in `tests/sim/test_generative.py`), and the profile updater's integration into ingest — all downstream of the ranker.
+
+---
+
+## Deployment
+
+**Prepared and locally verified, not yet live** — this needs the
+author's own authenticated `flyctl` session and Fly.io account (billing,
+Postgres/Redis provisioning), which the agent cannot create.
+
+- `Dockerfile` — multi-stage: builds `sdk/` + `web/` (Node), then a Python stage that installs the backend, bakes the real 810-item catalog in at image-build time (`RUN python -m catalog.build` — needs network access during `docker build`), and serves both the API and the built frontend from one `uvicorn` process (§2's "one FastAPI app, one React app," one process in production too). `server/main.py` now has a production-only static-file + SPA-fallback route (only mounted when `web/dist` exists — dev keeps using Vite's own server).
+- **Verified locally**: built the image from a clean cache twice (confirming the download-race fix above), ran the container against the existing docker-compose Postgres/Redis, confirmed `/api/health`, `/api/home`, `/`, and `/favicon.svg` all serve correctly, and confirmed the `noindex` header is present on every response.
+- `fly.toml` — app config, `shared-cpu-1x` / 512MB, `auto_stop_machines` so it doesn't run (or cost) anything while idle.
+
+### What the author needs to do (the agent cannot do this part)
+
+```powershell
+# flyctl is already installed (winget install --id Fly-io.flyctl)
+flyctl auth login          # opens a browser — needs the author's account
+flyctl launch --no-deploy  # confirms/adjusts fly.toml, picks a real app name
+flyctl postgres create     # managed Postgres — note the connection string
+flyctl redis create        # managed Redis (Upstash) — note the connection string
+flyctl secrets set DATABASE_URL=... REDIS_URL=...
+flyctl deploy
+```
+
+Once that's done, the repo can flip from private to public per the
+kickoff instructions' condition ("stays private until the synthetic-
+content labeling, the consent gate, and noindex are all in place" — all
+three are already true; deploying doesn't change that gate, it's just
+the last item still open).

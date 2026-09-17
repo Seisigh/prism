@@ -7,13 +7,18 @@ order). This file intentionally stays a single FastAPI app per §2:
 """
 from __future__ import annotations
 
+from pathlib import Path
+
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from server.catalog_store import get_store
 from server.config import settings
 from server.ingest.routes import router as ingest_router
+
+WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
 
 app = FastAPI(title="PRISM API")
 
@@ -178,3 +183,22 @@ def home():
         items = store.rail_popular_in_category(cat, exclude_id=None, limit=12)
         rails.append({"rail_id": f"home-{cat}", "policy_id": "popularity_fallback", "title": cat, "items": items})
     return {"categories": store.categories, "rails": rails}
+
+
+# Production only: serve the built React app from the same process (§2's
+# "one FastAPI app, one React app" — in prod that's one process too). In
+# dev, Vite's own server handles this and proxies /api and /ws here
+# instead (see web/vite.config.ts); web/dist doesn't exist in dev.
+if WEB_DIST.is_dir():
+    app.mount("/assets", StaticFiles(directory=str(WEB_DIST / "assets")), name="web-assets")
+
+    @app.get("/{full_path:path}")
+    @app.head("/{full_path:path}")
+    def spa_fallback(full_path: str):
+        # Any path not already matched by an API route above is a
+        # client-side route (react-router) — serve index.html and let
+        # the SPA's own router take it from there.
+        candidate = WEB_DIST / full_path
+        if full_path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(WEB_DIST / "index.html")
