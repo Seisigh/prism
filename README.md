@@ -127,7 +127,13 @@ the offline-recomputed canonical views and modes side by side.
 > modeling assumptions about shopper behavior, not measured facts, so an
 > ablation result attributing signal to mode should be read as "the
 > simulator's stated hypothesis about mode was recoverable," not as
-> independent evidence that the hypothesis is true of real shoppers.
+> independent evidence that the hypothesis is true of real shoppers. The
+> simulator also assumes motor output (cursor trajectories, scroll
+> pacing) is coupled to the evolving decision state as it accumulates,
+> not independent of it, per the mouse-tracking literature (Leontyev &
+> Yamauchi 2021, §16) — that assumption is what makes recovering interest
+> from behavior possible at all. It is an assumption the simulator is
+> built on, not a finding this project has demonstrated.
 >
 > **Fabricated content.** Product images derive from Amazon Berkeley
 > Objects under CC BY-NC 4.0 and some show manufacturer logos on

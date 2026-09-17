@@ -153,20 +153,28 @@ def simulate_session(
         u = utility(archetype, item.vector)
         result = dwell_via_drift_diffusion(u, archetype, mode, rng)
 
-        target = _grid_position(grid_index)
-        reach = reach_trajectory(cursor, target, archetype, rng, t0=t)
+        # accept_pos is the item's own card (staying on / committing to
+        # it); reject_pos is the next item's position (moving on) — the
+        # two on-screen destinations the DDM's evidence path blends
+        # between as it evolves (see generative.py's module docstring).
+        accept_pos = _grid_position(grid_index)
+        reject_pos = _grid_position(grid_index + 1)
+        reach = reach_trajectory(archetype, result.accumulator_path, cursor, accept_pos, reject_pos, rng, t0=t)
         for p in reach:
             session.events.append(RawEvent(t=p.t, type="pointer_sample", item_id=item.item_id, surface=surface, payload={"x": p.x, "y": p.y}))
         t_reach_end = reach[-1].t if reach else t
         cursor = (reach[-1].x, reach[-1].y) if reach else cursor
 
-        remaining_dwell = max(0.0, result.dwell_ms - (t_reach_end - t))
-        if remaining_dwell > 0:
-            jitter = fixation_jitter(target, remaining_dwell, archetype, rng, t0=t_reach_end)
+        diffusion_time = result.accumulator_path[-1].t if result.accumulator_path else 0.0
+        fixation_duration = max(0.0, result.dwell_ms - diffusion_time)
+        if fixation_duration > 0:
+            jitter = fixation_jitter(archetype, result.accumulator_path, cursor, fixation_duration, rng, t0=t_reach_end)
             for p in jitter:
                 session.events.append(RawEvent(t=p.t, type="pointer_sample", item_id=item.item_id, surface=surface, payload={"x": p.x, "y": p.y}))
+            if jitter:
+                cursor = (jitter[-1].x, jitter[-1].y)
 
-        scroll = reading_scroll(result.dwell_ms, archetype, rng, t0=t, start_ratio=min(1.0, step / max(1, n_items)))
+        scroll = reading_scroll(archetype, result.accumulator_path, rng, t0=t, start_ratio=min(1.0, step / max(1, n_items)))
         for s in scroll:
             session.events.append(RawEvent(t=s.t, type="scroll_sample", item_id=None, surface=surface, payload={"y_ratio": s.y_ratio}))
 

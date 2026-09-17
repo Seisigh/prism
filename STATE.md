@@ -525,6 +525,110 @@ mode-conditional process). Flagging it rather than redesigning the motor
 model unilaterally. **Stopped here to report before changing
 `sim/generative.py` further.**
 
+### Motor/reading output now coupled to the DDM's evidence path — a stated modeling assumption, with the line drawn precisely (author's ruling)
+
+The author's ruling on the question above, recorded here as a modeling
+assumption before it was implemented, per the same practice as
+`sim/mode_priors.py`'s DDM priors:
+
+> Coupling motor and reading output to the DDM's **evidence path** is
+> mechanism, and is required — this is the foundational claim of
+> mouse-tracking as a method: the hand begins moving while evidence is
+> still accumulating, so partial and sometimes-reversing evidence leaks
+> into motor output before the decision resolves. Leontyev & Yamauchi
+> (2021), already cited in BUILD_BRIEF.md §16, map trajectory features
+> onto DDM parameters in real people — a generator whose trajectories
+> are independent of its own DDM asserts the opposite, which is wrong,
+> not conservative. Coupling to the **outcome, the label, or the true
+> utility** directly is leakage and remains forbidden. Direction has to
+> come from somewhere mechanical: accept and reject live in different
+> places on a real storefront (accept -> the item's own action region;
+> reject -> the next item / forward scroll), so the momentary drift
+> direction biases which of the two the cursor is currently heading
+> toward — behaviorally real, not invented.
+
+**Implemented in `sim/generative.py`:**
+- `dwell_via_drift_diffusion` now records and returns the full evidence
+  trajectory (`AccumulatorSample` samples, one per 50ms diffusion step)
+  alongside `dwell_ms`/`committed_positive`, as `DriftDiffusionResult.accumulator_path`.
+- `reach_trajectory(archetype, accumulator_path, start, accept_pos, reject_pos, rng, t0)`:
+  the cursor continuously pursues a target blended between `accept_pos`
+  (the item's own card — `sim/session.py` supplies this) and `reject_pos`
+  (the next item's grid position), weighted by `tanh(evidence / threshold)`
+  read causally off `accumulator_path` at each 60Hz tick — never a later
+  sample, never the path's own final length used to shape earlier steps.
+- `fixation_jitter(archetype, accumulator_path, center, duration_ms, rng, t0)`:
+  now runs only during the flat non-decision-time tail (after the
+  accumulator has already terminated), with a small steady lean read off
+  the path's own final sample.
+- `reading_scroll(archetype, accumulator_path, rng, t0, start_ratio)`:
+  pause probability and forward speed are nudged by the same momentary
+  evidence pull (lingering when evidence leans accept, moving on faster
+  when it leans reject), read causally at each step.
+- None of the three take `utility`, `decision`, `outcome`, `label`,
+  `committed`, or `committed_positive` — enforced mechanically by
+  `tests/sim/test_generative.py::test_motor_functions_never_take_a_forbidden_parameter`
+  (inspects the actual function signatures), the same move that made the
+  feature-window leakage rule enforceable rather than a convention.
+- Causality (no lookahead) is enforced by
+  `test_reach_and_scroll_are_causal_in_the_accumulator_path`: truncating
+  `accumulator_path` partway through and rerunning with an identically-seeded
+  rng produces byte-identical output at or before the truncation point.
+- `test_reach_trajectory_ends_nearer_accept_when_evidence_stays_positive`
+  confirms the coupling actually works mechanically: a path ramping
+  toward +threshold ends the reach nearer `accept_pos`; a path ramping
+  toward -threshold ends nearer `reject_pos`.
+- All 164 existing tests still pass; import-linter contract holds.
+
+**Rerun of the diagnostic and the full DoD harness after the fix:**
+
+Raw composite-vs-`committed` correlations are still ~0 (attention -0.056,
+motor_conflict -0.034, exploration -0.040, comparison -0.034), and the
+full DoD harness (375/375 train/held-out sessions) gives essentially the
+same numbers as before the fix:
+
+```
+[1] Overall rho: 0.074 (need > 0.6)         [2] Archetype accuracy: 0.296 (need > 0.7, chance 0.20)
+Negative control: rho = 0.049, archetype accuracy = 0.315 (both correctly ~chance -- clean, no leakage introduced)
+```
+
+This is the expected result, not a failure of the fix (author's ruling,
+item 4 — the negative control staying clean is the thing that had to be
+verified, and it is: shuffling utility still collapses both metrics to
+chance). The isolated unit test above already proves the coupling
+mechanism itself works: a real, direction-dependent trajectory now
+exists in the raw event stream. **What's missing is downstream of the
+generator, per the author's own prediction:** none of the five registered
+motor signals (`peak_pointer_velocity_on_approach`, `trajectory_curvature_auc`,
+`trajectory_x_flips`, `acceleration_profile`, `pause_count`) measure
+*which* target the trajectory ended up closer to — every one of them
+measures the *magnitude or shape* of motion (how fast, how curved, how
+many reversals, how jittery), which is symmetric with respect to
+accept-vs-reject direction by construction, the same symmetry problem
+dwell itself has. The new evidence-coupled direction is real in the
+event log, but nothing currently reads it out.
+
+**A directional signal, if the author wants one added** (not added here,
+per instruction — described, not implemented): a feature that measures
+where the trajectory ended up (or spent most of its time) *along the
+accept-reject axis*, e.g. "final distance to `accept_pos` minus final
+distance to `reject_pos`," or a time-integrated version (net displacement
+toward accept vs reject over the whole reach) rather than a single
+endpoint reading, since a late reversal should count differently than a
+trajectory that leaned one way the whole time. This is the "Signal 6" the
+author flagged as closest today (§9.4's conditional, gated
+"cursor-to-target distance") — that signal currently only measures
+distance to *this item's own* position, which is exactly `accept_pos`
+and therefore has nothing to compare against; a directional version needs
+`reject_pos` (or the next item's position) as a second reference point,
+which today's signal functions don't receive at all (`ItemContext` has no
+notion of "the other candidate location"). Recorded here for the author's
+decision, not implemented.
+
+**Not yet touched, and next after the author's direction:** the ranker
+itself (`eval/ranker.py`), which was not modified in this pass — the
+finding above is upstream of it.
+
 ---
 
 ## Gate 2 — noted, not started

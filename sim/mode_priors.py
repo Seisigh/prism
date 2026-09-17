@@ -11,10 +11,13 @@ fitting.
 
 Mode modulates exactly three things: drift rate, boundary separation,
 and (for refind only) non-decision time. It never touches dwell,
-curvature, or any other feature directly — `sim/generative.py`'s
-`reach_trajectory` and `fixation_jitter` take `archetype` only, not mode,
-and `dwell_via_drift_diffusion`'s only mode-derived inputs are the three
-DDM parameters below. Touching a feature directly would reintroduce the
+curvature, or any other feature directly — mode's only reach into
+`sim/generative.py` is shaping the DDM's evidence path via the three
+parameters below; `reach_trajectory`, `fixation_jitter` and
+`reading_scroll` never receive `mode` itself, only the `archetype` and
+the resulting `accumulator_path` (see that module's docstring for the
+evidence-path coupling rule and why it isn't the same thing as touching
+a feature directly). Touching a feature directly would reintroduce the
 exact circularity §11's "parameterize the agent independently of the
 feature set" rule exists to prevent (see sim/agents.py's docstring).
 """

@@ -10,6 +10,8 @@ built on top of it can't recover anything real regardless of its own
 quality — so this is the honest, currently-buildable piece of that DoD
 item, not a claim to have satisfied it.
 """
+import inspect
+import math
 import random
 import statistics
 
@@ -17,7 +19,16 @@ import pytest
 
 from sim.agents import ARCHETYPES, utility
 from sim.embedding import ItemVector
-from sim.generative import dwell_via_drift_diffusion
+from sim.generative import (
+    AccumulatorSample,
+    dwell_via_drift_diffusion,
+    fixation_jitter,
+    reach_trajectory,
+    reading_scroll,
+)
+
+FORBIDDEN_PARAM_NAMES = {"utility", "decision", "outcome", "label", "committed", "committed_positive"}
+MOTOR_FUNCTIONS = [reach_trajectory, fixation_jitter, reading_scroll]
 
 
 def _spearman(xs: list[float], ys: list[float]) -> float:
@@ -142,3 +153,79 @@ def test_higher_threshold_archetypes_take_longer_on_average():
     skimmer_dwell = avg_dwell("skimmer")
     deliberator_dwell = avg_dwell("deliberator")
     assert deliberator_dwell > skimmer_dwell
+
+
+def test_motor_functions_never_take_a_forbidden_parameter():
+    """The structural half of the coupling rule (author's ruling):
+    reach_trajectory, fixation_jitter and reading_scroll may couple to
+    the DDM's evidence path, but never to utility, the decision, the
+    outcome, or a label directly. Enforced on the actual signatures, the
+    same way the feature-window leakage rule is enforced mechanically
+    rather than by convention or docstring."""
+    for fn in MOTOR_FUNCTIONS:
+        params = set(inspect.signature(fn).parameters.keys())
+        forbidden_present = params & FORBIDDEN_PARAM_NAMES
+        assert not forbidden_present, f"{fn.__name__} takes forbidden parameter(s): {forbidden_present}"
+
+
+def _linear_path(total_ms: float, final_evidence: float, step_ms: float = 50.0) -> tuple[AccumulatorSample, ...]:
+    """A deterministic accumulator path ramping linearly from 0 to
+    `final_evidence` — a stand-in for a real DDM path, used to test the
+    motor functions' own causality/coupling behavior in isolation from
+    the stochastic DDM."""
+    n = max(1, int(total_ms / step_ms))
+    return tuple(AccumulatorSample(t=i * step_ms, evidence=final_evidence * (i / n)) for i in range(n + 1))
+
+
+def test_reach_and_scroll_are_causal_in_the_accumulator_path():
+    """No lookahead (author's ruling, item 2): output at time t may
+    depend only on accumulator state up to and including t. Truncating
+    the path partway through must not change any output at or before
+    the truncation point, for a fresh, identically-seeded rng."""
+    archetype = ARCHETYPES["deliberator"]
+    full_path = _linear_path(total_ms=1000.0, final_evidence=2.0)
+    truncate_t = 400.0
+    truncated_path = tuple(s for s in full_path if s.t <= truncate_t)
+
+    full_reach = reach_trajectory(archetype, full_path, (0.0, 0.0), (100.0, 0.0), (-100.0, 0.0), random.Random(42), t0=0.0)
+    truncated_reach = reach_trajectory(archetype, truncated_path, (0.0, 0.0), (100.0, 0.0), (-100.0, 0.0), random.Random(42), t0=0.0)
+    early_full = [p for p in full_reach if p.t <= truncate_t]
+    early_truncated = [p for p in truncated_reach if p.t <= truncate_t]
+    assert early_full == early_truncated
+
+    full_scroll = reading_scroll(archetype, full_path, random.Random(7), t0=0.0)
+    truncated_scroll = reading_scroll(archetype, truncated_path, random.Random(7), t0=0.0)
+    early_full_scroll = [s for s in full_scroll if s.t <= truncate_t]
+    early_truncated_scroll = [s for s in truncated_scroll if s.t <= truncate_t]
+    assert early_full_scroll == early_truncated_scroll
+
+
+def test_reach_trajectory_ends_nearer_accept_when_evidence_stays_positive():
+    """Behavioral check of the coupling itself: a path that ramps
+    decisively toward +threshold the whole way should pull the cursor
+    toward accept_pos; a path that ramps decisively negative should pull
+    it toward reject_pos. This is the mechanism the ranker's motor
+    signals are supposed to be able to read a directional trace from."""
+    archetype = ARCHETYPES["deliberator"]
+    accept_pos, reject_pos = (500.0, 0.0), (-500.0, 0.0)
+
+    positive_path = _linear_path(total_ms=800.0, final_evidence=archetype.threshold * 1.5)
+    negative_path = _linear_path(total_ms=800.0, final_evidence=-archetype.threshold * 1.5)
+
+    positive_reach = reach_trajectory(archetype, positive_path, (0.0, 0.0), accept_pos, reject_pos, random.Random(1), t0=0.0)
+    negative_reach = reach_trajectory(archetype, negative_path, (0.0, 0.0), accept_pos, reject_pos, random.Random(1), t0=0.0)
+
+    def dist(p, target):
+        return math.hypot(p.x - target[0], p.y - target[1])
+
+    assert dist(positive_reach[-1], accept_pos) < dist(positive_reach[-1], reject_pos)
+    assert dist(negative_reach[-1], reject_pos) < dist(negative_reach[-1], accept_pos)
+
+
+def test_fixation_jitter_and_reading_scroll_run_without_crashing_on_empty_path():
+    archetype = ARCHETYPES["skimmer"]
+    empty_path: tuple[AccumulatorSample, ...] = ()
+    jitter = fixation_jitter(archetype, empty_path, (0.0, 0.0), 200.0, random.Random(1), t0=0.0)
+    scroll = reading_scroll(archetype, empty_path, random.Random(1), t0=0.0)
+    assert jitter
+    assert scroll
