@@ -1,0 +1,63 @@
+# ---- Never commit these. The first two are the ones that matter. ----
+
+# Source imagery and derived thumbnails. Hundreds of megabytes.
+# Commit the pipeline, not its output.
+data/raw/
+data/images/
+data/thumbs/
+catalog/downloads/
+
+# Structural reference screenshots of a third-party retailer.
+# Local reference only. These must never enter a commit or a deploy.
+docs/reference/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Model artifacts and training dumps
+models/artifacts/
+data/parquet/
+*.pkl
+*.joblib
+*.onnx
+
+# Simulator output
+sim/runs/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/
+blob-report/
+
+# OS and editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+
+# Logs
+*.log
+npm-debug.log*
+
+# ---- Deliberately NOT ignored ----
+# docs/screens/   -> README screenshots, these SHOULD be committed
+# STATE.md        -> build state, must be committed for session resumption

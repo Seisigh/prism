@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="PRISM">
+  <title>PRISM</title>
+  <!-- incoming beam -->
+  <path d="M1 16 H11" stroke="#5A616E" stroke-width="2" stroke-linecap="round"/>
+  <!-- dispersed beams -->
+  <path d="M20.5 16 L31 10.5" stroke="#E8432F" stroke-width="1.75" stroke-linecap="round"/>
+  <path d="M20.5 16 L31 14"   stroke="#E88B2F" stroke-width="1.75" stroke-linecap="round"/>
+  <path d="M20.5 16 L31 17.5" stroke="#3FA654" stroke-width="1.75" stroke-linecap="round"/>
+  <path d="M20.5 16 L31 21"   stroke="#3D8FDB" stroke-width="1.75" stroke-linecap="round"/>
+  <!-- prism -->
+  <path d="M16 5 L27 26 H5 Z" fill="none" stroke="#14161C" stroke-width="2"
+        stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

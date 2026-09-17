@@ -1,0 +1,56 @@
+PRISM
+=====
+
+Third-party data and attribution.
+
+--------------------------------------------------------------------
+Amazon Berkeley Objects (ABO)
+--------------------------------------------------------------------
+
+Product imagery and base product metadata in this project derive from
+the Amazon Berkeley Objects dataset.
+
+  Source:  https://registry.opendata.aws/amazon-berkeley-objects/
+  License: Creative Commons Attribution-NonCommercial 4.0 International
+           (CC BY-NC 4.0)
+           https://creativecommons.org/licenses/by-nc/4.0/
+
+Use in this project is non-commercial research and portfolio work.
+
+IMPORTANT, for anyone reusing this repository: the CC BY-NC 4.0 terms
+attach to the ABO-derived imagery and metadata, not to this project's
+source code. The code license is stated separately in LICENSE. You may
+reuse the code under that license; you may not use the ABO-derived
+assets commercially under any license granted here. The image corpus is
+not distributed in this repository (see .gitignore) — the pipeline that
+fetches and processes it is.
+
+--------------------------------------------------------------------
+Generated content
+--------------------------------------------------------------------
+
+All brand names shown in this project's catalog are invented. Prices,
+star ratings, review counts, review text, stock levels and shipping
+estimates are generated and are labeled as synthetic in the interface.
+
+Nothing in this catalog describes a real product, a real price, or a
+real customer opinion. Some source photographs show manufacturer logos;
+no listing text names any real manufacturer, and no statement here is a
+claim about any real company's goods.
+
+This project is not affiliated with, endorsed by, or connected to any
+retailer.
+
+--------------------------------------------------------------------
+Fonts
+--------------------------------------------------------------------
+
+Inter, by Rasmus Andersson, under the SIL Open Font License 1.1
+  https://github.com/rsms/inter
+
+--------------------------------------------------------------------
+Icons
+--------------------------------------------------------------------
+
+Lucide, under the ISC License
+  https://lucide.dev
