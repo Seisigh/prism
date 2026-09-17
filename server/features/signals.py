@@ -29,6 +29,18 @@ class ItemContext:
     surface: str
     mode: str
     pointer_type: PointerType
+    # Gate 1 additions (server/features/signals_gate1.py). All optional
+    # and caller-supplied session context, not derived from `events` —
+    # unlike the Gate 0 fields above, these describe facts about the
+    # *rest of the session*, so the caller (not this module) is
+    # responsible for the leakage guarantee: every value here must be
+    # computed only from views strictly before this one. See
+    # signals_gate1.py's docstring for the contract in full.
+    category: str | None = None
+    prior_view_starts_for_item: tuple[float, ...] = ()
+    prior_view_categories: tuple[str, ...] = ()
+    active_query_token_count: int | None = None
+    near_substitute_coview_count: int | None = None
 
 
 def _pointer_samples(events: list[RawEvent], window: WindowSpec) -> list[tuple[float, float, float]]:

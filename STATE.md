@@ -3,7 +3,7 @@
 Read this alongside `BUILD_BRIEF.md` before doing anything else in a new
 session. This file is updated after each module, not at the end.
 
-**Current gate:** 0 complete. Gate 1 started (simulator + taste vector built and tested; ranker/calibration/profile-updater wiring not yet).
+**Current gate:** 0 complete. Gate 1 in progress: simulator, taste vector, mode-conditional generative process, Gate-1 signals, composites, and a ranker pipeline are all built and tested, but the ranker does not yet clear its DoD bars — see "Ranker built (§11), but the Gate 1 DoD numbers are not there yet" below for the diagnosed cause and an open question for the author before touching `sim/generative.py` again.
 **Repo:** https://github.com/Seisigh/prism (private)
 **Deployment: blocked on the author's action** — see "Deployment" section near the end. Everything needed is prepared and locally verified (Dockerfile builds clean, container runs and serves correctly); it needs an authenticated `flyctl` session, which the agent cannot create.
 
@@ -441,9 +441,89 @@ Checked every place dwell touches the pipeline so far:
 
 ### What's not built yet for Gate 1
 
-- **Calibration against real traces** (§11's stated step 2, before the ranker) — needs the author's own real browsing data, which doesn't exist yet: no deployment, so no real sessions to calibrate `sim/agents.py`'s motor/timing parameters against. Genuinely blocked on deployment + the author actually using the deployed site, not something buildable in isolation.
-- **The ranker** (LambdaRank over within-session pairs, five family composites, per-mode calibration) — not started, and now blocked on the mode-conditional-generative-process question above before it can honestly claim per-mode validity. Next piece to build once that's resolved.
-- Archetype linear-probe recovery, the negative control at the full-pipeline level (§11's actual DoD items, distinct from the generative-process-level sanity checks already passing in `tests/sim/test_generative.py`), and the profile updater's integration into ingest — all downstream of the ranker.
+- **Calibration against real traces** (§11's stated step 2, before the ranker) — needs the author's own real browsing data, which doesn't exist yet: no deployment, so no real sessions to calibrate `sim/agents.py`'s motor/timing parameters against. Genuinely blocked on deployment + the author actually using the deployed site, not something buildable in isolation. Proceeding to the ranker on synthetic data anyway per the author's explicit instruction (§11 itself: "the ranker trains primarily on synthetic sessions").
+- The profile updater's integration into ingest — downstream of the ranker, not started.
+
+### Ranker built (§11), but the Gate 1 DoD numbers are not there yet — flagging the likely cause rather than tuning around it
+
+Built and tested: six new Gate-1 signals (`server/features/signals_gate1.py`
+— revisit_count, category_breadth, query_specificity, pause_count,
+acceleration_profile, focused_idle, all computable from event types the
+SDK already emits; `attention_split_spec_images_reviews` and
+`zoom_and_gallery_advances` are **not** implemented — they need DOM-region
+visibility and gallery/zoom event types the SDK doesn't emit yet, flagged
+here rather than approximated from unrelated data). A declared, fixed
+signal→family composite mapping (`server/features/composites.py`,
+5 families, with an availability meta-composite). A simulated-session
+feature-extraction bridge running the real sealed-window + signal
+pipeline (`eval/features.py`), a training-corpus builder spanning all
+five archetypes × five goal conditions including a shuffled-utility
+negative-control mode (`eval/corpus.py`), a per-mode LightGBM LambdaRank
+ranker (`eval/ranker.py`), online-ridge signal-weighting recovery with a
+population prior (`eval/signal_weighting.py`), and an end-to-end DoD
+harness (`eval/gate1_dod.py`). All have passing tests.
+
+**Running the actual DoD harness at real scale (625 train / 625 held-out
+sessions, ~13.6k views) gives numbers well short of target:**
+
+```
+[1] Overall Spearman rho (predicted vs utility, held-out): 0.066  (need > 0.6)
+    Per-session mean rho: 0.122
+    broad_search      rho = 0.123      directed_search  rho = 0.142
+    comparison        rho = 0.054      discovery        rho = 0.042
+    refind            rho = 0.113
+[2] Archetype separation accuracy: 0.357  (need > 0.7, chance = 0.20)
+Negative control: rho = 0.087, archetype accuracy = 0.269  (both correctly ~chance)
+```
+
+The negative control is clean (shuffling utility collapses both metrics
+to chance, as it should), so there's no leakage — the pipeline just
+isn't recovering enough real signal. **Diagnosed cause, not yet fixed:**
+I checked the ceiling this design can even reach. `rho(utility, committed)`
+— the correlation between true utility and the DDM's own binary outcome,
+with no ranker or composites involved at all — is 0.42–0.66 per mode
+(0.53 overall), so there *is* real recoverable signal in the generative
+process. But every composite's raw correlation with `committed` comes out
+essentially zero (-0.01 to -0.08, checked directly against the raw z-scored
+signals, before any model). Root cause: in the current generative model
+(`sim/generative.py`), `reach_trajectory`, `fixation_jitter`, and
+`reading_scroll` take only `(archetype, rng)` — never the DDM's outcome or
+its evidence trajectory — so curvature, velocity, pauses and scroll
+behavior are archetype fingerprints with **no dependence on which way the
+decision went**, only on how long it took. And dwell length itself is
+deliberately ∩-shaped (symmetric around indifference) by design, so it
+doesn't carry decision *direction* either — only decision *proximity to
+indifference*. The only outcome-direction-bearing quantity in the whole
+generative process is the DDM's own `committed_positive` boolean, and
+nothing in the feature-generating side of the simulator is wired to it at
+all. That's a real gap in the generative model, not a data-scale problem
+(quintupling the corpus from 125 to 625 sessions moved archetype accuracy
+from 0.20 to 0.357 but left rho flat at ~0.07–0.12).
+
+I also checked the ∩-aware dwell transform this same file already flagged
+as required before any ranker existed ("dwell needs a representation that
+can express the ∩-shape... if it enters the ranker's feature set") —
+`composites.py` currently feeds raw signed z-scored dwell into the
+attention family. Tried `|z-scored dwell|` (which should recover *some*
+signal if the problem were purely sign-symmetry): correlation with
+`committed` went from -0.057 (signed) to -0.012 (absolute) — i.e. it did
+not help, which confirms the deeper diagnosis below rather than a shallow
+encoding bug: dwell genuinely carries no outcome-direction information in
+this generative model, in either its signed or unsigned form, so no
+transform of dwell alone fixes it.
+
+The larger question — whether the motor/reading models should be extended
+to depend on the DDM's own evidence trajectory (e.g. a confidence/margin
+quantity derived from the *same* random walk, not hand-set to the label,
+which is a well-established real phenomenon in mouse-tracking literature:
+trajectory curvature reflecting decision conflict) — changes the
+"parameterize independently of the feature set" invariant this project has
+been built around, and touching `sim/generative.py`'s motor model again is
+squarely the kind of generative-process decision the author has stepped in
+on personally twice already this session (the dwell shape, the
+mode-conditional process). Flagging it rather than redesigning the motor
+model unilaterally. **Stopped here to report before changing
+`sim/generative.py` further.**
 
 ---
 
