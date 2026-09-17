@@ -157,9 +157,13 @@ event-log viewer.
 
 ## Next
 
-Gate 0's remaining items: deploy to a URL, README with screenshots/GIF, the manual gate itself (mine to do, not the agent's — see below). Then Gates 1–3 (modeling, simulator, recommender, ablation), not started — those are substantial additional ML engineering (LightGBM ranker, a drift-diffusion simulator, LinUCB, an ablation harness) that this session did not reach; flagging that honestly rather than shipping a rushed stub.
+`README.md` — **done**, with real screenshots and an honesty section that reflects Gate 0's actual state (no Gate 1+ metrics invented). No profile-panel GIF yet — the panel only has an honest empty state to show until Gate 1's taste vector exists; a fabricated "updating" animation would misrepresent what's built, so it's skipped rather than faked, flagged here instead.
+
+Gate 0's remaining item: deploy to a URL. Then Gates 1–3 (modeling, simulator, recommender, ablation), not started — those are substantial additional ML engineering (LightGBM ranker, a drift-diffusion simulator, LinUCB, an ablation harness) that this session did not reach; flagging that honestly rather than shipping a rushed stub.
 
 **Manual gate status: ready.** `/admin/session` is live and working — paste a session code (shown in the consent-gate footer and site footer) or session_id, see the raw log next to the recomputed canonical views/modes. Confirmed working against real browser sessions during this build.
+
+**Open decision, not the agent's to make:** no `LICENSE` file has been chosen for the repo's own code (separate from the ABO dataset's CC BY-NC 4.0 terms in `NOTICE`). Flagged rather than guessed.
 
 ---
 
