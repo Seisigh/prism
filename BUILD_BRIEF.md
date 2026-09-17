@@ -39,7 +39,7 @@ These are correctness constraints, not preferences. Violating any of them invali
 
 ## 2. Stack
 
-- Backend: Python 3.11+, FastAPI, WebSockets
+- Backend: **Python 3.12**, FastAPI, WebSockets
 - Frontend: React + TypeScript, Vite
 - Data: Postgres (events, catalog), Redis (live session state), Parquet (training dumps)
 - Models: LightGBM, scikit-learn, numpy. Exact cosine over a numpy matrix for similarity — the catalog is small enough that ANN would be slower and would read as cargo cult.
@@ -50,6 +50,14 @@ These are correctness constraints, not preferences. Violating any of them invali
 ### 2.1 Deployment
 
 Target Fly.io or Railway. Both host a Python process, managed Postgres and managed Redis on one account, and both support WebSockets, which rules out the static hosts. Deploy from Gate 0 onward so the site is always live somewhere; do not leave deployment to the end, because that is where week-long surprises live.
+
+### 2.1a Local environment — Windows, read before running anything
+
+The development machine is Windows, not Linux or macOS. Three consequences:
+
+- **Use Python 3.12 explicitly.** Python 3.14 is also installed and is the default `python` on PATH. Do not use it: LightGBM, scikit-learn and pyarrow have no prebuilt wheels for 3.14, so pip will attempt source builds that need a C++ toolchain. Create the environment with `py -3.12 -m venv .venv` and activate with `.\.venv\Scripts\Activate.ps1`. Every Python command in this project runs inside that venv.
+- **Postgres and Redis run in Docker**, via the `docker-compose.yml` already in the repo. Redis has no supported native Windows build. Connection strings are in `.env.example` and already match the compose file. Start services with `docker compose up -d`.
+- **Shell is PowerShell, not bash.** Write scripts as `.ps1` or, better, as Python so they are portable. Do not assume `&&` chaining, `rm -rf`, or POSIX path separators in anything committed.
 
 ### 2.2 Required Claude Code setup
 
@@ -303,6 +311,38 @@ Text contrast at least 4.5:1, interactive elements 3:1. Full keyboard navigation
 
 ---
 
+## 6.7 Admin console — built in Gate 2
+
+The storefront is the demo. The admin console is the evidence. For anyone evaluating this project technically, it is the more interesting of the two, and it is also the tool that makes the system debuggable at all.
+
+Route `/admin`, behind authentication **in every environment including local**: a single password read from the environment, a signed session cookie, no user accounts. Never linked from the public site, and excluded from the sitemap along with everything else under `noindex`.
+
+### Views
+
+**1. Sessions list.** All sessions, newest first. Columns: code, started, duration, item views, commitments, mode distribution, browser and device, consent state, `demo` flag. Filterable by real versus demo, by date, and by whether the session produced any commitment. Click through to detail.
+
+**2. Session detail — the signal table.** The core screen. One row per item view, showing item, surface, mode, and **every signal in three columns: raw value, normalized value, and availability**. Then the predicted interest score and the label that actually materialized. Being able to look at one row and see that hover was unavailable rather than zero, and that dwell was 1.4 standard deviations above this person's baseline for that mode rather than three seconds, is what makes every later debugging session tractable.
+
+**3. Live view.** WebSocket-fed, follows an active session as it happens: the event stream, both vectors updating, and the current slate with the reason each item was chosen — score, rail, propensity, and whether the core-seeding boost applied. Freeze and step controls, because watching it at full speed is impressive and useless for finding bugs.
+
+**4. Event log viewer.** Raw events, filterable by type, with computed view boundaries overlaid so the opening and closing of each view is visible against the underlying events. This is the tool Gate 0's manual check requires, so it exists before this section is built.
+
+**5. Signal distributions.** Per signal, per mode, per surface: histogram plus availability rate. This is how you notice that hover is null on every detail page, or that a normalizer is producing a degenerate distribution, before either one silently corrupts a model.
+
+### New profile
+
+An admin-only control that issues a fresh session id and clears local state, so cold start can be re-tested without clearing browser data. This is a development convenience and is not exposed to visitors, who have the separate and intentional deletion flow described in `COPY.md`.
+
+### Explicitly not building
+
+No queues, no sharding, no read replicas, no caching layer, no horizontal scaling story. One user, 750 items, a few thousand events per session, and a database that answers in single-digit milliseconds. **Any abstraction introduced "for scale" without a second implementation behind it is speculative and gets cut.** The goal of this console is legibility, not throughput, and a reviewer who knows the field reads premature scale infrastructure as inexperience rather than foresight.
+
+### Privacy
+
+The console displays pseudonymous session codes only. It never shows an IP, a name, or anything tying a session to a person, because none of that is collected. Authentication is required everywhere. The claims the README makes about this system's data have to stay true on the admin side too, and this is the surface where they would quietly stop being true.
+
+---
+
 ## 7. Telemetry
 
 ### 7.1 Envelope
@@ -457,7 +497,7 @@ Critical: parameterize the agent **independently of the feature set**. Do not wr
 - Epsilon-greedy recommender over the context catalog. Candidate generation by exact cosine on the taste vector with category and price-band filters. MMR diversity. A permanent fraction of sessions served a uniformly random policy.
 - **Ablation harness.** For each non-excluded signal and each family, retrain and remeasure recovery with it removed. Output a ranked contribution table. This is the most interesting artifact in the repo: it answers what trajectory curvature actually buys you under a declared generative model, and it needs no participants.
 - Load test at the latency budget: **p95 < 250ms** from trigger to pushed update. Score on semantic triggers (view end, hover threshold, scroll milestone, panel open, search submit), not on every flush.
-- Admin dashboard: live profile panel, feature importances, per-mode metrics, ablation table.
+- Admin console per §6.7: sessions list, session signal table, live view, event log viewer, signal distributions, new-profile control. Behind auth. Plus feature importances, per-mode metrics, and the ablation table.
 - README including the honesty section in §14.
 
 ---

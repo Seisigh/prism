@@ -239,30 +239,149 @@ respected, which they are.
 - `sim/session.py` — simulates a full session for one archetype against real catalog items, laid out on a synthetic grid, producing `RawEvent`s in the exact shape `server/features/window_spec.py` expects. The simulator's output goes through the *same* `item_view.py`/`signals.py` pipeline real telemetry does — verified directly (`sim.session.simulate_session` → 10 items → 2,884 raw events → 10 canonical views, dwell/commit outcomes tracking utility as expected).
 - `server/models/taste_vector.py` — §11's fully-specified update rule (`v_0` = catalog centroid, never the zero vector; `w_i = clip(2p_i - 1, -0.5, 1.0)`, `-0.5` on a fast skip; `eta=0.3`, `lambda=0.067`), with the population-prior gate below 3 scored views built in rather than left for callers to remember. 12 tests: unit norm after 200 arbitrary updates, bounded magnitude under extreme weights, convergence toward a repeatedly-liked direction and away from a repeatedly-disliked one, and the population-prior gate's exact boundary.
 
-### A real, useful modeling finding from testing the simulator against itself
+### Dwell vs. utility: corrected terminology, real data, and a fast-skip fix
 
 The first version of `tests/sim/test_generative.py` asserted dwell
 correlates positively with utility — and failed, including a *negative*
-correlation in one case. Investigating: this isn't a bug in the
-generative model, it's correct drift-diffusion behavior. Dwell (time to
-decide) is **U-shaped in utility**, longest near indifference (utility ≈
-0 → the evidence random-walks before crossing either threshold) and
-*short* at a strongly positive **or** strongly negative utility (a
-confident decision, reached quickly, either way). What's actually
-monotonic in utility is the **commitment rate** — which threshold gets
-hit — not dwell duration. This is the simulator concretely reproducing
-§4.2's own warning ("Do not assume dwell is positively related to
-interest in `directed_search`") as an emergent property of a physically-
-motivated process, not a rule anyone hand-coded — a good sign the model
-is principled rather than curve-fit to the brief's prose. Tests fixed to
-check commitment rate (the real signal) and to explicitly document the
-U-shape as intentional, not asserted away.
+correlation in one case. That's correct drift-diffusion behavior, not a
+bug: reaction time in a DDM peaks when drift is near zero and falls off
+as |drift| grows in either direction. **I initially mislabeled this
+"U-shaped" in this file and in code comments — that's backwards.** A U
+dips in the middle and rises at the edges; what the model actually
+produces is the opposite: a peak in the middle, falling at both edges —
+**∩-shaped** (inverted-U / peaked-at-indifference). Corrected everywhere
+it appeared (`tests/sim/test_generative.py`'s test name and docstring,
+this file).
+
+The actual curve — mean dwell (ms) binned by decile of injected utility,
+generated fresh from `sim/generative.dwell_via_drift_diffusion`, one row
+per archetype (the current generative process doesn't yet take `mode` as
+an input at all — see the gap noted below, this table is *not* yet a
+per-mode breakdown because there is nothing in the code today that would
+make it one):
+
+```
+decile (mean u)      skimmer   deliberator  price_hunter  image_driven  spec_reader
+0  (-2.2ish)            277        2047          679           683         2524
+1  (-1.7ish)             363        2674          903           900         3375
+2  (-1.2ish)             520        3700         1206          1211         4725
+3  (-0.7ish)             865        6141         2012          2420         8798
+4  (-0.2ish)            1354       12270         4979          4098        15524   <- near indifference
+5  (+0.2ish)             1445       13411         5223          3157        14837   <- near indifference
+6  (+0.7ish)              813        6724         1949          1800         7787
+7  (+1.2ish)              537        3863         1252          1200         4603
+8  (+1.7ish)              371        2594          924           829         3139
+9  (+2.2ish)              292        2059          714           690         2610
+```
+
+Every single archetype: lowest at both extremes, highest at deciles 4-5
+(utility near zero). What's actually monotonic in utility is the
+**commitment rate** (which threshold gets hit), not dwell duration — a
+separate check (`u=+2.0 → commit_rate=1.00`, `u=-2.0 → commit_rate=0.00`,
+smoothly monotonic in between) confirms that's the real interest signal.
+This is the simulator concretely reproducing §4.2's own warning ("Do not
+assume dwell is positively related to interest in `directed_search`") as
+an emergent property of a physically-motivated process, not a rule
+anyone hand-coded. Tests fixed to check commitment rate and to
+explicitly document the ∩-shape as intentional, not asserted away.
+
+**Gap this surfaced, not yet fixed:** `dwell_via_drift_diffusion` takes
+`(utility, archetype, rng)` — mode is not a parameter anywhere in
+`sim/generative.py`, and `sim/session.py` doesn't yet generate
+multi-mode sessions (no query-driven `directed_search`, no
+`comparison`-mode co-viewing). So the table above is genuinely the best
+"per mode" breakdown obtainable from the current code — there's only one
+mode's worth of behavior being generated. Given §4/§4.2's whole point is
+that mode changes the dwell/interest relationship (e.g. long dwell in
+`directed_search` often means *failure to find*, not interest), the
+simulator arguably needs mode-conditional generative parameters before
+its output can honestly claim to validate per-mode ranker calibration.
+Flagging this now rather than building the ranker against a
+mode-blind simulator and discovering the gap later. **Open question for
+the author:** should mode modulate the drift-diffusion parameters
+directly (e.g. `directed_search` gets a different decision_rate/noise
+profile, or an inverted utility-to-drift mapping to capture
+"failure to find"), or should mode stay a pure *stratification* concern
+applied to real+simulated data alike in the ranker/normalization layer,
+with the generative process itself staying mode-agnostic? Both are
+defensible reads of §4; picking one changes `sim/generative.py`'s
+signature. Not guessed at — flagged for a decision before the ranker
+needs it.
+
+### Fast-skip was unsafe as originally implemented — found and fixed
+
+Consequence of the ∩-shape above: **a short view is ambiguous between a
+confident reject and a confident accept** — decile 9 (strong positive,
+commit_rate≈1.0) and decile 0 (strong negative, commit_rate≈0.0) have
+comparably *short* dwell for every archetype. `server/features/labels.py`'s
+`is_fast_skip` originally keyed on duration alone
+(`view_duration_ms < threshold_ms`), which — unchecked — would have
+put the strongest positives (decided on instantly) into the negative
+class right alongside genuine fast rejections, and this function had
+**no tests at all**, which is how it went unnoticed.
+
+Fixed: `is_fast_skip` now requires a short exposure **and** no later
+commitment **and** no later revisit of that same item in the session —
+only a short view that's never returned to and never committed to is
+safely a fast skip. New `tests/features/test_labels.py`, 10 tests,
+including the exact failure scenario (`test_short_view_later_committed_is_NOT_a_fast_skip`)
+and the revisit case, both passing. Also renamed a confusingly-named
+constant in `sim/session.py` (`FAST_SKIP_DWELL_FLOOR_MS`, 300ms) that
+had nothing to do with the fast-skip *label* concept at all — it was
+`item_view.py`'s unrelated 300ms view-qualifying floor under a name that
+invited exactly this kind of confusion. Now imports the real constant
+(`MIN_QUALIFYING_DURATION_MS`) from `item_view.py` instead of duplicating
+the number under a misleading name.
+
+### Confirmed: nothing assumes dwell is monotonic in interest
+
+Checked every place dwell touches the pipeline so far:
+- `signals.item_dwell` returns `log1p(duration_s)` — a raw sealed-window
+  measurement, not an interest score; it doesn't encode or assume any
+  particular relationship to interest, monotonic or otherwise. That
+  interpretation work is the ranker's job, not signals.py's.
+- `taste_vector.py`'s `weight_from_calibrated_interest` takes `p_i`
+  (*calibrated* interest, i.e. a model's output) and `is_fast_skip`
+  directly — it never touches raw dwell.
+- **No LightGBM ranker exists yet**, so there are no `monotone_constraints`
+  to audit today. Recorded here as a binding constraint on that work when
+  it starts: **no monotonic constraint on any dwell-derived feature**,
+  and no linear-only encoding of dwell as a single scalar proxy for
+  interest — dwell needs a representation that can express the ∩-shape
+  (e.g. binned/one-hot, or paired with |dwell - session-mode-median| as
+  a second feature) if it enters the ranker's feature set as anything
+  more than one input among the five family composites, which is where
+  §11 actually wants it to live in the first place.
 
 ### What's not built yet for Gate 1
 
 - **Calibration against real traces** (§11's stated step 2, before the ranker) — needs the author's own real browsing data, which doesn't exist yet: no deployment, so no real sessions to calibrate `sim/agents.py`'s motor/timing parameters against. Genuinely blocked on deployment + the author actually using the deployed site, not something buildable in isolation.
-- **The ranker** (LambdaRank over within-session pairs, five family composites, per-mode calibration) — not started. Per §11's own reasoning ("the ranker trains primarily on synthetic sessions, so it cannot exist first"), training against the simulator's current (uncalibrated) output is the intended primary path regardless of the real-trace calibration gap above — calibration refines the simulator's parameters, it isn't a hard prerequisite for the ranker's training loop to exist. Next piece to build.
+- **The ranker** (LambdaRank over within-session pairs, five family composites, per-mode calibration) — not started, and now blocked on the mode-conditional-generative-process question above before it can honestly claim per-mode validity. Next piece to build once that's resolved.
 - Archetype linear-probe recovery, the negative control at the full-pipeline level (§11's actual DoD items, distinct from the generative-process-level sanity checks already passing in `tests/sim/test_generative.py`), and the profile updater's integration into ingest — all downstream of the ranker.
+
+---
+
+## Gate 2 — noted, not started
+
+`BUILD_BRIEF.md` was replaced with a version adding **§6.7 (admin
+console)** and revising Gate 2's bullet list to include it
+("Admin console per §6.7: sessions list, session signal table, live
+view, event log viewer, signal distributions, new-profile control.
+Behind auth."). This is a **Gate 2 deliverable** — not started, per the
+author's explicit instruction to just note it here rather than begin it
+now. Gate 0's manual-gate event-log viewer (`/admin/session`, already
+built) is explicitly called out in §6.7 item 4 as the predecessor this
+console's own event-log view builds on ("This is the tool Gate 0's
+manual check requires, so it exists before this section is built") —
+so that piece is already done and just needs auth + the other four views
+wrapped around it when Gate 2 starts.
+
+Also new: **§2.1a**, Windows-specific local environment guidance (Python
+3.12 explicitly, not the 3.14 also on PATH; Postgres/Redis in Docker;
+PowerShell not bash for anything committed). Already compliant — `.venv`
+was created against Python 3.12.10, Postgres/Redis already run via the
+existing `docker-compose.yml`, and nothing committed to the repo is a
+`.sh` script.
 
 ---
 

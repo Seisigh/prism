@@ -98,11 +98,14 @@ def test_negative_control_shuffled_utility_breaks_correlation():
     assert abs(shuffled_rho) < 0.2, f"shuffled control should be ~0, got {shuffled_rho:.3f}"
 
 
-def test_dwell_is_u_shaped_in_utility_not_monotonic():
+def test_dwell_is_peaked_at_indifference_not_monotonic():
     """Documents the property above as an explicit, intentional
     behavior (not just an assumption baked into the other tests):
     average dwell near indifference (utility ~ 0) should exceed average
-    dwell at a strongly positive OR strongly negative utility."""
+    dwell at a strongly positive OR strongly negative utility — an
+    inverted-U / "peaked" curve (RT peaks at zero drift rate in a DDM),
+    the opposite of a literal U-shape (which would mean dwell dips at
+    indifference and rises at the extremes)."""
     archetype = ARCHETYPES["skimmer"]
     rng = random.Random(5)
 

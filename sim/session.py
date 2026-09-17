@@ -13,13 +13,19 @@ from dataclasses import dataclass
 from sim.agents import Archetype, utility
 from sim.embedding import ItemVector
 from sim.generative import dwell_via_drift_diffusion, fixation_jitter, reach_trajectory, reading_scroll
+from server.features.item_view import MIN_QUALIFYING_DURATION_MS
 from server.features.window_spec import CommitmentEvent, RawEvent
 
 GRID_COLS = 4
 CELL_W, CELL_H = 320.0, 340.0
 GRID_ORIGIN = (80.0, 200.0)
 
-FAST_SKIP_DWELL_FLOOR_MS = 300.0  # below this, no view opens at all (matches item_view.py's own qualifying threshold)
+# NOT the fast-skip *label* threshold (server/features/labels.py's
+# FAST_SKIP_THRESHOLD_MS_DEFAULT, 1500ms, a much later and separate
+# concern) — this is item_view.py's own 300ms qualifying-exposure floor:
+# below it, no canonical view opens *at all*, so there's nothing for the
+# label logic to even look at. Imported rather than duplicated so the two
+# modules can't silently drift apart.
 
 
 @dataclass
@@ -89,7 +95,7 @@ def simulate_session(
 
         view_start_t = t
         view_end_t = t + result.dwell_ms
-        if result.dwell_ms >= FAST_SKIP_DWELL_FLOOR_MS:
+        if result.dwell_ms >= MIN_QUALIFYING_DURATION_MS:
             events.append(RawEvent(t=view_start_t, type="visibility_sample", item_id=item.item_id, surface=surface, payload={"ratio": 1.0}))
             events.append(RawEvent(t=view_end_t, type="visibility_sample", item_id=item.item_id, surface=surface, payload={"ratio": 0.0}))
             views.append(
