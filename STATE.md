@@ -107,9 +107,26 @@ required empty/declined/building profile states).
 - Perceived blue-tinted body text on the consent gate — confirmed via `getComputedStyle` that all three paragraphs are identical `rgb(90,97,110)`; a PNG-compression artifact, not a real color difference.
 - Some catalog items show real manufacturer logos on grocery packaging (`amazonbasics`, `365`, `Wag`) — this is the accepted residual case in §5.3 (incidental photo, no brand named in text), not a leak. Verified via the automated `test_no_leaked_brands.py` scan of all 810 items' served text.
 
+## `server/features/` — done (the leakage-critical module)
+
+Pure Python, zero imports from `ingest`/`models`/`recommender` (enforced
+by `import-linter`, part of `pyproject.toml`, run via `lint-imports` — see
+"features has no upward imports" contract, currently **kept**). 89 tests,
+all passing.
+
+- `item_view.py` — the canonical view function (§8). All 6 required fixtures pass (simple open/close, merge-gap, multi-surface tie, tab-blur mid-view, rapid-scroll sub-threshold, mode-assigned-once-at-open), plus extras (below-threshold never opens, gap>=500ms doesn't merge, navigation force-close). Multi-surface attribution: pointer focus at the overlap's start wins; no focus signal falls back to surface depth (`detail > compare > grid > rail`). Mode assignment is injected as a callback (`ModeResolver`) rather than imported, so this module's tests stay free of mode-precedence fixtures and vice versa — see its docstring for why.
+- `mode.py` — §4 browsing-mode stratum. `assign_mode` enforces the full precedence (`refind > comparison > directed_search > broad_search > discovery`); `classify_query_tokens` resolves the §4.1 ambiguity flagged at kickoff (model-token regex `/^[a-z]{0,4}-?\d+[a-z0-9-]*$/i`, mirrors `catalog/titles.py`'s SKU heuristic — same judgment, same shape of evidence).
+- `window_spec.py` — `WindowSpec` is `[t_start, t_end)`, half-open, `t_end` exclusive so an event *at* the seal is never admitted. `seal_window_for_view` implements §9.1's truncate-at-first-commitment-minus-1000ms rule, clamped so it never produces a negative-length window (collapses to zero length instead — every signal must degrade to `None` there, and does, tested explicitly).
+- `signals.py` — all 8 Gate 0 signals (§9.3), each `f(events, window, ctx) -> float | None`, each reading only through `events_in_window` (never `events` directly). Touch `pointer_type` gates the whole motor-signal family off (hover, velocity, curvature, x-flips) per §7.3, tested explicitly.
+- `labels.py` — the Tier-1 weak label (§9.1, deliberately session-wide and NOT window-sealed — it's the prediction target, not a feature) and `is_fast_skip` (§9.3 item 8 — "the negative-class definition, not a feature," kept out of `SIGNAL_REGISTRY` on purpose). The fast-skip threshold is a documented placeholder (`FAST_SKIP_THRESHOLD_MS_DEFAULT`) — §9.5 wants it fit from a real exposure distribution, which doesn't exist yet at this point in the build (no simulator, no deployed traffic); flagged here and in the original preflight list as a Gate 1 follow-up, not silently treated as final.
+- `resample.py` — §7.3's 60Hz linear-interpolation resampling, tested for cross-rate agreement (two synthetic "browsers" sampling the same motion at ~120Hz and ~30Hz land within 5% of each other post-resample).
+- `normalize.py` — `z_score`, the within-(session, mode, surface) half of §4.2's dwell normalization. The "centered within item" half needs cross-session per-item baselines, which is session-store aggregation state that belongs to `server/ingest`, not a pure-function module — not implemented yet, flagged rather than half-built.
+- `tests/features/test_leakage.py` — the build-failing audit (§10.8), table-driven over `SIGNAL_REGISTRY`: for every signal, injects "poison" events at and after the seal shaped to swing the output hard (a 999999px pointer jump, a full-page scroll, an hour-long hover) and asserts the output is unchanged. A companion test guards against a vacuous pass (every signal must produce a real, non-None value on the baseline, so "blind to poison" can't be confused with "blind to everything").
+- `tests/features/test_invariance.py`, `test_resample.py` — §15 items 7 and 8 (curvature rotation-invariance, z-score scale-invariance, dwell monotonicity, resampling tolerance).
+
 ## Next
 
-`sdk/` (browser telemetry package) → `server/ingest` (WS + HTTP, Redis session state) → `server/features` (window-spec'd signal functions, the leakage-critical module) → the three Gate-0 tests (leakage, skew, item-view fixtures) → event-log viewer for the manual gate. None of these started yet.
+`sdk/` (browser telemetry package) → `server/ingest` (WS + HTTP, Redis session state, unpacks `pointer_batch`/`scroll_batch` envelopes into the flat `pointer_sample`/`scroll_sample`/`visibility_sample` RawEvents `signals.py` consumes) → skew test (needs ingest to exist first, per the stated build order) → event-log viewer for the manual gate.
 
 ---
 
