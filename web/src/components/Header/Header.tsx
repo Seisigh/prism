@@ -2,6 +2,7 @@ import { Heart, MapPin, ShoppingCart, SlidersHorizontal, User } from 'lucide-rea
 import { useEffect, useState } from 'react'
 import { NavLink, Link } from 'react-router-dom'
 import { api } from '../../lib/api'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useCart } from '../../state/CartContext'
 import { useWishlist } from '../../state/WishlistContext'
 import { SearchBar } from '../SearchBar/SearchBar'
@@ -11,6 +12,7 @@ export function Header({ onOpenProfile }: { onOpenProfile: () => void }) {
   const [categories, setCategories] = useState<string[]>([])
   const { count } = useCart()
   const { ids: wishlistIds } = useWishlist()
+  const sdk = usePrismSDK()
 
   useEffect(() => {
     api
@@ -75,6 +77,7 @@ export function Header({ onOpenProfile }: { onOpenProfile: () => void }) {
               key={c}
               to={`/category/${encodeURIComponent(c)}`}
               className={({ isActive }) => [styles.navLink, isActive ? styles.active : ''].join(' ')}
+              onClick={() => sdk?.trackCategoryNavClick()}
             >
               {c}
             </NavLink>

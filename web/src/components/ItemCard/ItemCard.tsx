@@ -1,6 +1,8 @@
 import { Heart } from 'lucide-react'
+import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogItem } from '../../lib/types'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useWishlist } from '../../state/WishlistContext'
 import { Price } from '../Price/Price'
 import { ProductImage } from '../ProductImage/ProductImage'
@@ -16,9 +18,18 @@ interface ItemCardProps {
 export function ItemCard({ item, sponsored = false, eagerImage = false }: ItemCardProps) {
   const { has, toggle } = useWishlist()
   const wishlisted = has(item.item_id)
+  const sdk = usePrismSDK()
+  const cardRef = useRef<HTMLElement>(null)
+
+  useEffect(() => {
+    if (!sdk || !cardRef.current) return
+    const el = cardRef.current
+    sdk.registerItemCard(el, item.item_id)
+    return () => sdk.unregisterItemCard(el)
+  }, [sdk, item.item_id])
 
   return (
-    <article className={styles.card} data-item-id={item.item_id}>
+    <article ref={cardRef} className={styles.card} data-item-id={item.item_id}>
       <div className={styles.imageWrap}>
         {item.badges[0] ? <span className={styles.badge}>{item.badges[0]}</span> : null}
         {sponsored ? <span className={styles.sponsored}>Sponsored</span> : null}
@@ -28,6 +39,7 @@ export function ItemCard({ item, sponsored = false, eagerImage = false }: ItemCa
           onClick={(e) => {
             e.preventDefault()
             toggle(item.item_id)
+            sdk?.trackWishlist(item.item_id, !wishlisted)
           }}
           aria-pressed={wishlisted}
           aria-label={wishlisted ? 'Remove from wishlist' : 'Add to wishlist'}

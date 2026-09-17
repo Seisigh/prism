@@ -1,6 +1,7 @@
 import { X } from 'lucide-react'
 import { useEffect } from 'react'
 import { emptyStates } from '../../copy'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useSession } from '../../state/SessionContext'
 import styles from './ProfilePanel.module.css'
 
@@ -15,10 +16,15 @@ interface ProfilePanelProps {
 // state truthfully rather than faked with placeholder numbers.
 export function ProfilePanel({ open, onClose }: ProfilePanelProps) {
   const { consent, setDemo } = useSession()
+  const sdk = usePrismSDK()
 
   useEffect(() => {
-    if (open) setDemo(true)
-  }, [open, setDemo])
+    if (!open) return
+    setDemo(true)
+    sdk?.setDemo(true)
+    sdk?.trackPanelOpen()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open])
 
   useEffect(() => {
     if (!open) return

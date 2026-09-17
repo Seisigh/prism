@@ -124,9 +124,42 @@ all passing.
 - `tests/features/test_leakage.py` — the build-failing audit (§10.8), table-driven over `SIGNAL_REGISTRY`: for every signal, injects "poison" events at and after the seal shaped to swing the output hard (a 999999px pointer jump, a full-page scroll, an hour-long hover) and asserts the output is unchanged. A companion test guards against a vacuous pass (every signal must produce a real, non-None value on the baseline, so "blind to poison" can't be confused with "blind to everything").
 - `tests/features/test_invariance.py`, `test_resample.py` — §15 items 7 and 8 (curvature rotation-invariance, z-score scale-invariance, dwell monotonicity, resampling tolerance).
 
+## `sdk/`, `server/ingest/`, event-log viewer, skew test — done
+
+Real, working, end-to-end telemetry, verified against the actual running
+app in a real browser (not just unit-tested in isolation) — accepted
+consent, browsed categories, opened a detail page, added to cart,
+filtered, sorted, and confirmed every single one of §7.2's 25 event types
+actually lands in Postgres with the right shape, then confirmed Redis
+carries real live session state too. Full pipeline: `web/` → `sdk/` →
+WebSocket → `server/ingest` → Postgres (durable log) + Redis (live
+state) → `server/features/replay.py` (offline recompute) → the
+event-log viewer.
+
+- `sdk/` (`sdk/src/`) — framework-agnostic TS package (§3), aliased into `web/` via a Vite/tsconfig path mapping (`@prism/sdk` → `sdk/src/index.ts`) rather than a build step, since both live in this one repo. `transport.ts` handles the WS connection (250ms flush, `sendBeacon` fallback on `pagehide`, bounded queue that drops the oldest entry under backpressure rather than growing unboundedly — §7.4). `pointerTracker.ts`/`scrollTracker.ts` do rAF-gated, coalesced-event sampling into delta-encoded batches. `itemVisibility.ts` is deliberately naive — raw IntersectionObserver 50%-threshold crossings only, no merge/300ms logic; `server/features/item_view.py` is the one canonical source of truth for real view boundaries (§8), computed offline from this raw stream, never duplicated client-side. `mode.ts` mirrors `server/features/mode.py`'s rules so the SDK can attach `mode` to each envelope in real time (the "online" path the skew test compares against).
+- `server/ingest/` — Postgres schema (`sessions`, `events`, idempotent on `event_id` via `ON CONFLICT DO NOTHING`), WebSocket + HTTP (`/api/events`, the `sendBeacon` target) endpoints, `DELETE /api/sessions/{code}` (cascades to events), `GET /api/sessions/by-code/{code}`. `session_state.py` is real, live Redis state (not a stub) — a session-active flag with a rolling 30-minute TTL matching §4.1a's idle-timeout boundary, and a live view counter backing "sessions with <3 views are excluded from normalization fitting," both verified against the real docker-compose Redis.
+- `server/features/replay.py` — offline recomputation: raw stored events → canonical views + modes, using the *exact same* `item_view.py`/`mode.py` functions the fixture tests exercise. Backs both the event-log viewer and the skew test. One documented simplification: §7.2 has no persisted event type for "category nav click" (only the SDK's in-memory tracker sees it), so the offline path proxies it with a `page_view` on the `category` surface — right in the common case (arriving via the nav strip), not exhaustive (e.g. browser back). Logged as a real, small skew source rather than assumed away.
+- `GET /api/sessions/{id}/views` + `web/src/pages/Admin/SessionViewer.tsx` (`/admin/session`) — **the Gate 0 manual gate tool.** Paste a code or session_id, see the raw event log and the recomputed canonical views/modes side by side. Not part of the polished consumer storefront (no nav link, no §6.6 review pass — it's a diagnostic, not a customer-facing surface) and has no admin auth yet (flagged below).
+- `tests/ingest/test_skew.py` — §10.9's skew test: a hand-scripted session exercising all five modes (including the query-expiry-via-category-nav-click edge case) run through `replay.py`, compared against the mode each event claims to have been assigned online. Reports a continuous skew rate (currently 0.0) rather than just asserting a boolean, per the brief.
+
+### Real bugs found while building this against the actual live app (not just unit tests)
+
+1. **jsonb payload roundtrip** — asyncpg doesn't auto-serialize Python dicts for `jsonb` columns; needed an explicit type codec (`set_type_codec` in `db.py`) or every insert threw `TypeError: expected str, got dict`.
+2. **A still-open view collapsed to zero duration.** `item_view.py`'s raw-run builder used a run's *own* last sample as its "still open" end time — correct when there's a real closing sample, wrong when there's only one sample (e.g. reading a session's log while an item is still visible, no `view_end` yet), where it collapsed to a zero-length run and silently vanished. Fixed by threading a separate `open_run_horizon` (the latest timestamp observed anywhere in the input) through — kept deliberately distinct from `session_horizon` (only ever set by an explicit caller) so an ordinary visibility-timeout close a few hundred ms before the last observed event doesn't get mislabeled `closed_by: "session_end"`. Caught by testing the event-log viewer against a real live session, not by a unit test — added as a regression fixture (`test_still_open_single_sample_view_extends_to_the_observed_horizon`) afterward.
+3. **`rec_impression` double-fired under React StrictMode's dev double-invoke.** Fixed with a dedupe set inside the SDK instance keyed on `(rail_id, slate)`.
+
+### Known gaps, flagged rather than silently skipped
+
+- **No admin auth on `/admin/session`.** Acceptable for now (site isn't deployed publicly yet, whole app is noindex + consent-gated), not acceptable to ship deployed without a real auth wall — needs one before the repo goes public per the kickoff instructions' own privacy gate.
+- **§10.11's 90-day retention purge (`purge_expired_sessions`) isn't wired to a scheduler.** No cron/deployment scheduler exists yet at this point in the build.
+- **The skew test uses a hand-scripted fixture, not a replayed real session**, because there's no deployed traffic yet to pull a real session from. A live-traffic version is a Gate 1+ follow-up once the site is actually deployed and has sessions to replay.
+- **The category-nav-click proxy in `replay.py`** (see above) is a real, documented, non-zero source of online/offline mode skew for the one case it can't see (a category page reached without a nav-strip click).
+
 ## Next
 
-`sdk/` (browser telemetry package) → `server/ingest` (WS + HTTP, Redis session state, unpacks `pointer_batch`/`scroll_batch` envelopes into the flat `pointer_sample`/`scroll_sample`/`visibility_sample` RawEvents `signals.py` consumes) → skew test (needs ingest to exist first, per the stated build order) → event-log viewer for the manual gate.
+Gate 0's remaining items: deploy to a URL, README with screenshots/GIF, the manual gate itself (mine to do, not the agent's — see below). Then Gates 1–3 (modeling, simulator, recommender, ablation), not started — those are substantial additional ML engineering (LightGBM ranker, a drift-diffusion simulator, LinUCB, an ablation harness) that this session did not reach; flagging that honestly rather than shipping a rushed stub.
+
+**Manual gate status: ready.** `/admin/session` is live and working — paste a session code (shown in the consent-gate footer and site footer) or session_id, see the raw log next to the recomputed canonical views/modes. Confirmed working against real browser sessions during this build.
 
 ---
 
@@ -142,16 +175,18 @@ fast-skip bootstrap problem, the skew-test fixture). Nothing new since.
 ## Gate 0 checklist (§10), live status
 
 1. Catalog pipeline (750 + 60, brand-scrubbed, thumbnails) — **done**
-2. Storefront serves every §6 surface — not started
-3. Consent gate blocks telemetry — not started
-4. SDK emits every §7.2 event type — not started
-5. Ingest persists idempotently, Redis session state — not started
-6. `features/` implements 8 Gate-0 signals — not started
-7. Item-view fixtures (6 cases) — not started
-8. Leakage test, build-failing — not started
-9. Skew test — not started
-10. §6.6 review loop, 2 passes/surface, `docs/screens/` — not started
-11. Deployed at a URL — not started
-12. Consent copy live — copy exists verbatim in `COPY.md`, not yet wired into a component
-13. `README.md` with screenshots/GIF/§14 — not started
-14. **Manual gate**: author confirms view boundaries/modes by hand against a raw event log — blocked on 4-9 existing first; will flag here the moment the event-log viewer is ready.
+2. Storefront serves every §6 surface — **done**, 20 screenshots in `docs/screens/`
+3. Consent gate blocks telemetry — **done** — SDK is only ever constructed after `consent === 'accepted'`; "Browse without recording" leaves no SDK instance at all, verified live (declined session shows 0 events)
+4. SDK emits every §7.2 event type — **done** — all 25 types confirmed flowing into Postgres via real browser sessions during this build, not just unit-tested
+5. Ingest persists idempotently, Redis session state — **done** — idempotency + Redis TTL/view-counter both verified against the real docker-compose services
+6. `features/` implements 8 Gate-0 signals — **done**, all reading only through `events_in_window`
+7. Item-view fixtures (6 cases) — **done**, 13 tests including all 6 required + a regression case found mid-build
+8. Leakage test, build-failing — **done**, table-driven over `SIGNAL_REGISTRY`
+9. Skew test — **done**, reports a continuous skew rate (currently 0.0) on a scripted fixture; a live-traffic version is a follow-up once deployed
+10. §6.6 review loop, 2 passes/surface, `docs/screens/` — **done** — every surface, real defects found and fixed each pass (see the storefront section above for the list), not just cosmetic tweaks
+11. Deployed at a URL — **not started**
+12. Consent copy live — **done**, verbatim from `COPY.md`, wired into `ConsentGate.tsx`
+13. `README.md` with screenshots/GIF/§14 — **not started**
+14. **Manual gate**: author confirms view boundaries/modes by hand against a raw event log — **ready**. `/admin/session` is live; paste a code or session_id to see the raw log next to the recomputed canonical views/modes.
+
+**Blocking Gate 0 completion: only #11 (deploy) and #13 (README) remain.**

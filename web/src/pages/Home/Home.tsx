@@ -5,9 +5,11 @@ import { home } from '../../copy'
 import { api } from '../../lib/api'
 import type { Rail as RailType } from '../../lib/types'
 import { ItemGrid } from '../../components/ItemGrid/ItemGrid'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import styles from './Home.module.css'
 
 export function Home() {
+  const sdk = usePrismSDK()
   const [slide, setSlide] = useState(0)
   const [rails, setRails] = useState<RailType[] | null>(null)
 
@@ -22,6 +24,15 @@ export function Home() {
       .then((r) => setRails(r.rails))
       .catch(() => setRails([]))
   }, [])
+
+  useEffect(() => {
+    if (!sdk || !rails) return
+    for (const rail of rails) {
+      const slate = rail.items.map((i) => i.item_id)
+      sdk.trackRecImpression(rail.rail_id, rail.policy_id, slate, slate.map(() => 1 / Math.max(slate.length, 1)))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdk, rails])
 
   return (
     <div className={styles.page}>

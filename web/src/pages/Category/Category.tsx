@@ -7,12 +7,14 @@ import { ItemGrid } from '../../components/ItemGrid/ItemGrid'
 import { api } from '../../lib/api'
 import type { Facets } from '../../lib/types'
 import type { CatalogItem } from '../../lib/types'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import listing from '../../styles/listing.module.css'
 
 export function Category() {
   const { category = '' } = useParams()
   const [searchParams, setSearchParams] = useSearchParams()
   const [items, setItems] = useState<CatalogItem[] | null>(null)
+  const sdk = usePrismSDK()
   const [total, setTotal] = useState(0)
   const [facets, setFacets] = useState<Facets | null>(null)
 
@@ -53,6 +55,7 @@ export function Category() {
     if (next.min_rating) params.set('min_rating', String(next.min_rating))
     if (next.in_stock_only) params.set('in_stock_only', 'true')
     setSearchParams(params)
+    sdk?.trackFilter(next)
   }
 
   return (
@@ -75,6 +78,7 @@ export function Category() {
               if (e.target.value === 'featured') params.delete('sort')
               else params.set('sort', e.target.value)
               setSearchParams(params)
+              sdk?.trackSort(e.target.value)
             }}
             aria-label="Sort by"
           >

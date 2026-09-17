@@ -1,0 +1,14 @@
+{
+  "name": "@prism/sdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "PRISM browser telemetry SDK — framework-agnostic (BUILD_BRIEF.md §3).",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  }
+}

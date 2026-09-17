@@ -1,0 +1,118 @@
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--sp-6);
+}
+
+.title {
+  font-size: var(--fs-24);
+  margin-bottom: var(--sp-2);
+}
+
+.sub {
+  color: var(--slate);
+  margin-bottom: var(--sp-6);
+  max-width: var(--measure);
+}
+
+.form {
+  display: flex;
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-8);
+  max-width: 420px;
+}
+
+.input {
+  flex: 1;
+  height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-14);
+  font-family: ui-monospace, monospace;
+}
+
+.columns {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-8);
+  align-items: start;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+
+.panelHeader {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  font-size: var(--fs-14);
+  display: flex;
+  justify-content: space-between;
+}
+
+.scrollBody {
+  max-height: 80vh;
+  overflow-y: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--slate-soft);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+}
+
+.table td {
+  padding: var(--sp-1) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.table tr:hover td {
+  background: var(--surface-alt);
+}
+
+.payload {
+  white-space: pre-wrap;
+  max-width: 320px;
+  color: var(--slate);
+}
+
+.modeTag {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+}
+
+.mode-discovery { background: var(--surface-sunken); color: var(--slate); }
+.mode-directed_search { background: var(--primary-tint); color: var(--primary); }
+.mode-broad_search { background: var(--primary-tint); color: var(--primary-hover); }
+.mode-comparison { background: var(--warning-tint); color: var(--warning-ink); }
+.mode-refind { background: var(--savings-tint); color: var(--savings); }
+
+.empty {
+  padding: var(--sp-8);
+  color: var(--slate-soft);
+  text-align: center;
+}

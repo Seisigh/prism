@@ -9,6 +9,7 @@ import { Rating } from '../../components/Rating/Rating'
 import { detail, reviewMarker } from '../../copy'
 import { api } from '../../lib/api'
 import type { CatalogItem, Rail } from '../../lib/types'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useCart } from '../../state/CartContext'
 import { useWishlist } from '../../state/WishlistContext'
 import { NotFound } from '../NotFound/NotFound'
@@ -22,6 +23,7 @@ export function Detail() {
   const [quantity, setQuantity] = useState(1)
   const { add } = useCart()
   const { has, toggle } = useWishlist()
+  const sdk = usePrismSDK()
 
   useEffect(() => {
     setItem(null)
@@ -32,6 +34,22 @@ export function Detail() {
     api.alsoViewed(itemId).then(setAlsoViewed).catch(() => setAlsoViewed(null))
     api.similar(itemId).then(setSimilar).catch(() => setSimilar(null))
   }, [itemId])
+
+  useEffect(() => {
+    if (!sdk || !itemId) return
+    sdk.trackDetailViewStart(itemId)
+    return () => sdk.trackDetailViewEnd(itemId)
+  }, [sdk, itemId])
+
+  useEffect(() => {
+    if (!sdk) return
+    for (const rail of [alsoViewed, similar]) {
+      if (!rail) continue
+      const slate = rail.items.map((i) => i.item_id)
+      sdk.trackRecImpression(rail.rail_id, rail.policy_id, slate, slate.map(() => 1 / Math.max(slate.length, 1)))
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdk, alsoViewed, similar])
 
   if (item === 'not-found') return <NotFound />
   if (item === null) {
@@ -58,7 +76,14 @@ export function Detail() {
       </div>
 
       <div className={styles.layout}>
-        {item.images ? <Gallery images={item.images} alt={item.alt_text} /> : null}
+        {item.images ? (
+          <Gallery
+            images={item.images}
+            alt={item.alt_text}
+            onZoom={() => sdk?.trackZoom(item.item_id)}
+            onAdvance={(i) => sdk?.trackGalleryAdvance(item.item_id, i)}
+          />
+        ) : null}
 
         <div className={styles.infoCol}>
           {item.badges[0] ? (
@@ -123,11 +148,21 @@ export function Detail() {
             <Button
               variant="primary"
               disabled={item.stock_status === 'out_of_stock'}
-              onClick={() => add(item, quantity)}
+              onClick={() => {
+                add(item, quantity)
+                sdk?.trackCartAdd(item.item_id, quantity)
+              }}
             >
               <ShoppingCart size={16} /> {detail.addToCart}
             </Button>
-            <Button variant="secondary" onClick={() => toggle(item.item_id)} aria-pressed={wishlisted}>
+            <Button
+              variant="secondary"
+              onClick={() => {
+                toggle(item.item_id)
+                sdk?.trackWishlist(item.item_id, !wishlisted)
+              }}
+              aria-pressed={wishlisted}
+            >
               <Heart size={16} fill={wishlisted ? 'currentColor' : 'none'} /> {detail.addToList}
             </Button>
           </div>

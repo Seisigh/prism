@@ -33,6 +33,19 @@ def test_simple_open_close():
     assert v.closed_by == "visibility_timeout"
 
 
+def test_still_open_single_sample_view_extends_to_the_observed_horizon():
+    # Only a view_start-equivalent sample exists (item still visible when
+    # the log was read, no view_end yet) — the view must extend to the
+    # latest observed timestamp, not collapse to zero duration at its own
+    # single sample.
+    samples = [vis(0, "i1", "grid", 0.9), vis(5000, "i2", "grid", 0.9)]  # i2 sets the observed horizon
+    views = compute_item_views(samples)
+    i1_view = next(v for v in views if v.item_id == "i1")
+    assert i1_view.start == 0
+    assert i1_view.end == 5000
+    assert i1_view.closed_by == "visibility_timeout"  # NOT "session_end" — no real horizon was given
+
+
 def test_below_threshold_never_opens_a_view():
     samples = [vis(0, "i1", "grid", 0.3), vis(500, "i1", "grid", 0.4)]
     assert compute_item_views(samples) == []

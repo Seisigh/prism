@@ -1,9 +1,10 @@
 import { CheckCircle2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Price } from '../../components/Price/Price'
 import { checkout, cart as cartCopy } from '../../copy'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useCart } from '../../state/CartContext'
 import styles from './Checkout.module.css'
 
@@ -11,6 +12,12 @@ export function Checkout() {
   const { lines, subtotalCents, clear } = useCart()
   const [confirmed, setConfirmed] = useState(false)
   const navigate = useNavigate()
+  const sdk = usePrismSDK()
+
+  useEffect(() => {
+    sdk?.trackCheckoutStart()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sdk])
 
   if (confirmed) {
     return (

@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.catalog_store import get_store
 from server.config import settings
+from server.ingest.routes import router as ingest_router
 
 app = FastAPI(title="PRISM API")
 
@@ -36,6 +37,8 @@ async def noindex_header(request, call_next):
 settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/media/thumbs", StaticFiles(directory=str(settings.thumbs_dir)), name="thumbs")
 
+app.include_router(ingest_router)
+
 
 @app.get("/api/health")
 def health():
@@ -46,6 +49,20 @@ def health():
 def categories():
     store = get_store()
     return {"categories": store.categories}
+
+
+@app.get("/api/brand-tokens")
+def brand_tokens():
+    """The closed set of invented-brand tokens actually in the catalog —
+    the SDK's online mode classifier (§4.1's "invented-brand token" rule)
+    needs this set to recognize a directed-search query without shipping
+    a full brand list of its own."""
+    store = get_store()
+    tokens: set[str] = set()
+    for item in store.all_items:
+        tokens.update(item["brand"].lower().replace("&", " ").split())
+    tokens.discard("co.")
+    return {"tokens": sorted(tokens)}
 
 
 @app.get("/api/items/{item_id}")

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../../lib/api'
 import type { AutocompleteSuggestion } from '../../lib/types'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import styles from './SearchBar.module.css'
 
 interface SearchBarProps {
@@ -11,6 +12,7 @@ interface SearchBarProps {
 
 export function SearchBar({ categories }: SearchBarProps) {
   const navigate = useNavigate()
+  const sdk = usePrismSDK()
   const [query, setQuery] = useState('')
   const [scope, setScope] = useState('all')
   const [suggestions, setSuggestions] = useState<AutocompleteSuggestion[]>([])
@@ -51,6 +53,7 @@ export function SearchBar({ categories }: SearchBarProps) {
 
   function submit(q: string) {
     setOpen(false)
+    sdk?.trackSearch(q)
     const params = new URLSearchParams({ q })
     navigate(`/search?${params.toString()}`)
   }
@@ -70,6 +73,7 @@ export function SearchBar({ categories }: SearchBarProps) {
       e.preventDefault()
       if (highlighted >= 0) {
         const s = suggestions[highlighted]
+        sdk?.trackAutocompleteSelect(s.item_id, query)
         navigate(`/item/${s.item_id}`)
         setOpen(false)
       } else {
@@ -126,6 +130,7 @@ export function SearchBar({ categories }: SearchBarProps) {
                 className={[styles.suggestion, highlighted === i ? styles.highlighted : ''].join(' ')}
                 onMouseEnter={() => setHighlighted(i)}
                 onClick={() => {
+                  sdk?.trackAutocompleteSelect(s.item_id, query)
                   navigate(`/item/${s.item_id}`)
                   setOpen(false)
                 }}

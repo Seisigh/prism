@@ -6,9 +6,11 @@ import { FacetRail, type FilterState } from '../../components/FacetRail/FacetRai
 import { ItemGrid } from '../../components/ItemGrid/ItemGrid'
 import { api } from '../../lib/api'
 import type { CatalogItem, Facets } from '../../lib/types'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import listing from '../../styles/listing.module.css'
 
 export function Search() {
+  const sdk = usePrismSDK()
   const [searchParams, setSearchParams] = useSearchParams()
   const query = searchParams.get('q') ?? ''
   const [items, setItems] = useState<CatalogItem[] | null>(null)
@@ -52,6 +54,7 @@ export function Search() {
     if (next.min_rating) params.set('min_rating', String(next.min_rating))
     if (next.in_stock_only) params.set('in_stock_only', 'true')
     setSearchParams(params)
+    sdk?.trackFilter(next)
   }
 
   const sponsored = query.trim() ? (items ?? []).slice(0, 2) : []
@@ -81,6 +84,7 @@ export function Search() {
               if (e.target.value === 'relevance') params.delete('sort')
               else params.set('sort', e.target.value)
               setSearchParams(params)
+              sdk?.trackSort(e.target.value)
             }}
             aria-label="Sort by"
           >

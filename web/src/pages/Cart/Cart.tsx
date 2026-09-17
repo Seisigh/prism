@@ -3,11 +3,13 @@ import { Button } from '../../components/Button/Button'
 import { Price } from '../../components/Price/Price'
 import { ProductImage } from '../../components/ProductImage/ProductImage'
 import { cart, emptyStates } from '../../copy'
+import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useCart } from '../../state/CartContext'
 import styles from './Cart.module.css'
 
 export function Cart() {
   const { lines, subtotalCents, setQuantity, remove } = useCart()
+  const sdk = usePrismSDK()
   const navigate = useNavigate()
 
   if (lines.length === 0) {
@@ -52,7 +54,13 @@ export function Cart() {
                       </option>
                     ))}
                   </select>
-                  <button className={styles.removeBtn} onClick={() => remove(line.item.item_id)}>
+                  <button
+                    className={styles.removeBtn}
+                    onClick={() => {
+                      remove(line.item.item_id)
+                      sdk?.trackCartRemove(line.item.item_id)
+                    }}
+                  >
                     Remove
                   </button>
                 </div>
