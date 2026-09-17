@@ -120,7 +120,14 @@ the offline-recomputed canonical views and modes side by side.
 > the simulator, and the recommender (BUILD_BRIEF.md §§11–13) are not
 > built. There is no latency number to report because there is no
 > real-time scoring path yet. This README will be updated with those
-> numbers once they exist, not before.
+> numbers once they exist, not before. Once a ranker ablation exists:
+> browsing mode's measured contribution to it will be partly a
+> consequence of how the simulator itself was parameterized (see
+> `STATE.md`'s per-mode DDM priors) — those per-mode priors are stated
+> modeling assumptions about shopper behavior, not measured facts, so an
+> ablation result attributing signal to mode should be read as "the
+> simulator's stated hypothesis about mode was recoverable," not as
+> independent evidence that the hypothesis is true of real shoppers.
 >
 > **Fabricated content.** Product images derive from Amazon Berkeley
 > Objects under CC BY-NC 4.0 and some show manufacturer logos on

@@ -285,28 +285,114 @@ an emergent property of a physically-motivated process, not a rule
 anyone hand-coded. Tests fixed to check commitment rate and to
 explicitly document the ∩-shape as intentional, not asserted away.
 
-**Gap this surfaced, not yet fixed:** `dwell_via_drift_diffusion` takes
-`(utility, archetype, rng)` — mode is not a parameter anywhere in
-`sim/generative.py`, and `sim/session.py` doesn't yet generate
-multi-mode sessions (no query-driven `directed_search`, no
-`comparison`-mode co-viewing). So the table above is genuinely the best
-"per mode" breakdown obtainable from the current code — there's only one
-mode's worth of behavior being generated. Given §4/§4.2's whole point is
-that mode changes the dwell/interest relationship (e.g. long dwell in
-`directed_search` often means *failure to find*, not interest), the
-simulator arguably needs mode-conditional generative parameters before
-its output can honestly claim to validate per-mode ranker calibration.
-Flagging this now rather than building the ranker against a
-mode-blind simulator and discovering the gap later. **Open question for
-the author:** should mode modulate the drift-diffusion parameters
-directly (e.g. `directed_search` gets a different decision_rate/noise
-profile, or an inverted utility-to-drift mapping to capture
-"failure to find"), or should mode stay a pure *stratification* concern
-applied to real+simulated data alike in the ranker/normalization layer,
-with the generative process itself staying mode-agnostic? Both are
-defensible reads of §4; picking one changes `sim/generative.py`'s
-signature. Not guessed at — flagged for a decision before the ranker
-needs it.
+**Gap this surfaced, now resolved by the author's answer:**
+`dwell_via_drift_diffusion` originally took `(utility, archetype, rng)`
+with no `mode` input at all. The author's ruling: **mode does modulate
+the generative process, but only at the process level** — it shifts the
+DDM's drift rate and boundary separation (and, for `refind`, its
+non-decision time). It must never touch dwell, curvature, or any other
+feature directly, which would reintroduce the exact circularity §11's
+"parameterize independently of the feature set" rule exists to prevent.
+
+### Per-mode DDM priors — a stated hypothesis, not a tuning knob
+
+Written here **before** implementation, per the author's explicit
+instruction, and copied into `sim/mode_priors.py`'s own docstring so the
+two can't drift apart. **These are a hypothesis about shopper behavior.
+They must not be adjusted later to make a downstream metric look
+better** — if a ranker result looks wrong once these are wired in, that
+is a signal to stop and raise it, not to retune these numbers until the
+metric improves.
+
+| Mode | drift multiplier | boundary multiplier | other | Reasoning |
+|---|---|---|---|---|
+| `directed_search` | 1.8, **bimodal**: 75% decisive / 25% scaled to 0.12 | 0.7 (lower) | — | Checking a known target is verification, not preference formation — genuine matches resolve fast. The 25% "ambiguous" tail scales drift toward zero **regardless of the item's own utility**, representing a close-but-wrong candidate that's plausible enough to cause hesitation. That tail *is* §4.2's "failure to find": long dwell in directed_search comes from this regime, not from interest — which is exactly why dwell means something different here than in discovery. |
+| `broad_search` | 1.2 | 0.85 | — | Between directed_search and discovery on both axes: a category-level goal without a single verified target. |
+| `discovery` | 0.7 (lower) | 1.3 (higher) | — | No target to verify against — utility has to be *constructed* from attributes as they're encountered, a noisier, slower-accumulating process, and more evidence is required before committing without a prior target-match signal to lean on. |
+| `comparison` | 0.5 | 1.4 (highest) | — | Drift concentrated near zero **by construction**: near-substitute items are deliberately controlled to vary one attribute at a time (`catalog/core_sets.py`), so they're close in utility to begin with; comparison's own low drift multiplier suppresses it further. Highest boundary of any mode → longest dwell, since resolving a close call takes the most accumulated evidence. |
+| `refind` | 1.6 | 0.6 (lowest) | non-decision time 80ms (vs. 250ms default) | The evaluation largely already happened on the first view — fast on every axis, including the encoding/motor overhead that's constant across the other modes. |
+
+### Mode emerges from goal + history, not a sampled input
+
+Per the author's explicit instruction, mode is never assigned or sampled
+directly anywhere in `sim/session.py`. Instead:
+
+- A simulated session gets an optional `SessionGoal` (`sim/session.py`):
+  `target_item_id`, `target_category`, or neither. A goal only ever
+  supplies the *fiction* of an active search query — a 3-token synthetic
+  query for an item target (guarantees `directed_search` classification
+  via §4.1's ≥3-token rule), a single categorical word for a category
+  target (guarantees `broad_search`).
+- Every view's mode is computed by calling the **exact same**
+  `server.features.mode.assign_mode` real ingested sessions are scored
+  with — fed the goal's query (if any) and the agent's own accumulating
+  `PriorView` history. `refind` and `comparison` are never specially
+  cased: they fall out of `assign_mode`'s own precedence rules applied
+  to whatever the agent actually did (a real revisit ≥60s later; two
+  near-substitute-set items viewed within 120s), exactly as §4.1
+  describes for real behavior.
+- Added a revisit mechanic (`revisit_prob`, default 0.15): at each step
+  the agent has a chance to go back to a previously-viewed item instead
+  of a new one — the only path to `refind`, since nothing else in the
+  function revisits.
+- `tests/sim/test_session.py` (7 tests, all passing against the real
+  built catalog) confirms all five modes genuinely emerge from the right
+  conditions: a goalless session is pure `discovery`; an item-goal
+  session is pure `directed_search`; a category-goal session is pure
+  `broad_search`; browsing a near-substitute-heavy pool produces
+  `comparison`; a long, slow, revisit-heavy session produces `refind`
+  (needed `deliberator` archetype + 60 items to accumulate the required
+  60+ real seconds — `skimmer` over 40 fast items never reached the
+  refind gap, which is realistic, not a bug: refind genuinely needs that
+  much elapsed time). One test statically greps `sim/session.py` for a
+  hardcoded `mode = "..."` literal bypassing `assign_mode`, to catch a
+  future edit reintroducing directly-sampled mode.
+
+### The real per-mode and per-archetype curves
+
+Generated by actually running `simulate_session` against the real
+810-item catalog (Kitchen & Dining items for discovery/search/refind
+sessions, the instrumented core's near-substitute sets pooled together
+for comparison sessions), pooling ~3,600 views across all five
+archetypes and five goal conditions. Two honest caveats before the
+numbers: (1) unlike the pure-archetype table above (a uniform synthetic
+utility sweep from -2.5 to 2.5), this pools *real* catalog utilities,
+which are not uniformly distributed and skew positive for several
+archetypes against this catalog slice — so each row's utility range
+differs and a strict decile-by-decile ∩ comparison across modes isn't
+directly meaningful; (2) pooling five archetypes together per mode means
+each decile mixes different archetypes' dynamics. What **is** directly
+meaningful and clean is each mode's overall dwell *scale*, which is
+exactly what the boundary multipliers control:
+
+```
+mode              n     mean dwell   median dwell
+comparison       463      4938ms        3750ms   <- highest boundary (1.4)
+discovery       1750      3669ms        2600ms   <- boundary 1.3
+broad_search     600      1723ms        1200ms   <- boundary 0.85
+directed_search  599      2434ms        1100ms   <- lowest boundary (0.7) but see below
+refind           170      1332ms         980ms   <- lowest boundary (0.6) + reduced non-decision time
+```
+
+Median ordering matches the boundary-multiplier ordering exactly:
+comparison > discovery > broad_search > directed_search > refind.
+`directed_search`'s *mean* (2434ms) sits above `broad_search`'s despite
+a lower boundary — that gap is the bimodal failure-to-find tail showing
+up concretely. Isolating just directed_search vs. broad_search
+(n=1500 each, mixed archetypes, item-goal vs. category-goal sessions):
+
+```
+mode              mean    median    p90    mean/median ratio
+directed_search  2261.4   1050.0   5450.0        2.15
+broad_search     1720.8   1250.0   3400.0        1.38
+```
+
+directed_search's mean/median ratio (2.15) is well above broad_search's
+(1.38) — a real-catalog confirmation that a *minority* of directed_search
+views run long (the ambiguous-tail regime) while the *typical*
+directed_search view resolves faster than a typical broad_search view
+(lower median), which is exactly the "failure to find is a tail, not the
+typical case" shape the priors were written to produce.
 
 ### Fast-skip was unsafe as originally implemented — found and fixed
 

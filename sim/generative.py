@@ -7,6 +7,13 @@ directly — they fall out of these physically-motivated processes, which
 is the whole point: it makes "does curvature carry information beyond
 dwell" (the ablation's central question) a real empirical question
 instead of one this module quietly answers by construction.
+
+Mode (§4) modulates the DDM's drift rate and boundary separation (and,
+for `refind`, non-decision time) via `sim/mode_priors.py` — see that
+module's docstring for why mode stops there and never touches dwell,
+curvature, or any other feature directly. `reach_trajectory` and
+`fixation_jitter` below take `archetype` only, deliberately: mode has no
+business anywhere in the motor model.
 """
 from __future__ import annotations
 
@@ -15,6 +22,7 @@ import random
 from dataclasses import dataclass
 
 from sim.agents import Archetype
+from sim.mode_priors import MODE_PRIORS
 
 DT_MS = 50.0
 MAX_DWELL_MS = 20_000.0
@@ -28,22 +36,34 @@ class DriftDiffusionResult:
     committed_positive: bool  # evidence crossed +threshold (interest) vs -threshold/timeout
 
 
-def dwell_via_drift_diffusion(utility: float, archetype: Archetype, rng: random.Random) -> DriftDiffusionResult:
-    """A random walk in evidence-space: drift proportional to utility,
-    archetype-specific noise, stopping at +/-threshold or a timeout. This
-    is the source of every dwell duration the simulator produces —
-    nothing downstream hand-sets a dwell number."""
+def dwell_via_drift_diffusion(utility: float, archetype: Archetype, mode: str, rng: random.Random) -> DriftDiffusionResult:
+    """A random walk in evidence-space: drift proportional to utility
+    (scaled by the archetype's baseline decision_rate and the mode's
+    drift_multiplier), archetype-specific noise (never mode-scaled — the
+    author's instruction is explicit that mode shifts drift and boundary
+    only), stopping at +/-threshold (scaled by the mode's
+    boundary_multiplier) or a timeout, plus the mode's non-decision time
+    added flat at the end. This is the source of every dwell duration the
+    simulator produces — nothing downstream hand-sets a dwell number."""
+    prior = MODE_PRIORS[mode]
+    if rng.random() < prior.bimodal_decisive_prob:
+        drift_scale = prior.drift_multiplier
+    else:
+        drift_scale = prior.bimodal_ambiguous_drift_scale
+    effective_decision_rate = archetype.decision_rate * drift_scale
+    effective_threshold = archetype.threshold * prior.boundary_multiplier
+
     evidence = 0.0
     t = 0.0
     dt_s = DT_MS / 1000.0
     while t < MAX_DWELL_MS:
-        evidence += archetype.decision_rate * utility * dt_s + rng.gauss(0, archetype.noise_sigma) * math.sqrt(dt_s)
+        evidence += effective_decision_rate * utility * dt_s + rng.gauss(0, archetype.noise_sigma) * math.sqrt(dt_s)
         t += DT_MS
-        if evidence >= archetype.threshold:
-            return DriftDiffusionResult(dwell_ms=t, committed_positive=True)
-        if evidence <= -archetype.threshold:
-            return DriftDiffusionResult(dwell_ms=t, committed_positive=False)
-    return DriftDiffusionResult(dwell_ms=MAX_DWELL_MS, committed_positive=evidence > 0)
+        if evidence >= effective_threshold:
+            return DriftDiffusionResult(dwell_ms=prior.non_decision_time_ms + t, committed_positive=True)
+        if evidence <= -effective_threshold:
+            return DriftDiffusionResult(dwell_ms=prior.non_decision_time_ms + t, committed_positive=False)
+    return DriftDiffusionResult(dwell_ms=prior.non_decision_time_ms + MAX_DWELL_MS, committed_positive=evidence > 0)
 
 
 @dataclass(frozen=True)

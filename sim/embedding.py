@@ -37,6 +37,7 @@ class ItemVector:
     item_id: str
     category: str
     vector: tuple[float, ...]  # aligned with DIMENSIONS
+    near_substitute_set_id: str | None = None  # core items only — drives comparison-mode detection
 
 
 def _load_catalog() -> dict:
@@ -81,5 +82,10 @@ def build_item_vectors() -> dict[str, ItemVector]:
             gallery_n / max_gallery,
             _TIER_SCORE[item["brand_tier"]],
         )
-        vectors[item["item_id"]] = ItemVector(item_id=item["item_id"], category=item["category"], vector=vec)
+        vectors[item["item_id"]] = ItemVector(
+            item_id=item["item_id"],
+            category=item["category"],
+            vector=vec,
+            near_substitute_set_id=item.get("near_substitute_set_id"),
+        )
     return vectors
