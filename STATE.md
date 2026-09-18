@@ -3,7 +3,7 @@
 Read this alongside `BUILD_BRIEF.md` before doing anything else in a new
 session. This file is updated after each module, not at the end.
 
-**Current gate:** 0 complete. **Gate 1: CLOSED.** Not by clearing the original fixed rho > 0.6 bar — that bar was retracted by the author as unreachable (it sat above the measured ceiling of the label the pipeline must use) — but by the revised DoD: the real condition's per-session rho and archetype-accuracy 95% CIs both fail to overlap a corrected, validated negative control's CI, at `sessions_per_condition=25` (the fixed standard). See "Gate 1 closes: the bar was wrong, the negative control was rebuilt, here is the primary result" near the end — read that section first in any future session; it is the most important thing in this file, not an appendix. Headline numbers: rho efficiency (achieved / ceiling) = 0.178; archetype-accuracy efficiency (chance-adjusted) = 0.513.
+**Current gate:** 0 mechanically complete but with one outstanding, unconfirmed item — see "Gate 0's manual check: still outstanding" below; **flagging this explicitly rather than letting it lapse quietly, per the author's own instruction.** **Gate 1: CLOSED.** Gate 2 in progress (recommender, ablation harness, admin console, load test). Not by clearing the original fixed rho > 0.6 bar — that bar was retracted by the author as unreachable (it sat above the measured ceiling of the label the pipeline must use) — but by the revised DoD: the real condition's per-session rho and archetype-accuracy 95% CIs both fail to overlap a corrected, validated negative control's CI, at `sessions_per_condition=25` (the fixed standard). See "Gate 1 closes: the bar was wrong, the negative control was rebuilt, here is the primary result" near the end — read that section first in any future session; it is the most important thing in this file, not an appendix. Headline numbers: rho efficiency (achieved / ceiling) = 0.178; archetype-accuracy efficiency (chance-adjusted) = 0.513.
 **Repo:** https://github.com/Seisigh/prism (private)
 **Deployment: blocked on the author's action** — see "Deployment" section near the end. Everything needed is prepared and locally verified (Dockerfile builds clean, container runs and serves correctly); it needs an authenticated `flyctl` session, which the agent cannot create.
 
@@ -162,7 +162,7 @@ event-log viewer.
 
 Gate 0's remaining item: deploy to a URL. Then Gates 1–3 (modeling, simulator, recommender, ablation), not started — those are substantial additional ML engineering (LightGBM ranker, a drift-diffusion simulator, LinUCB, an ablation harness) that this session did not reach; flagging that honestly rather than shipping a rushed stub.
 
-**Manual gate status: ready.** `/admin/session` is live and working — paste a session code (shown in the consent-gate footer and site footer) or session_id, see the raw log next to the recomputed canonical views/modes. Confirmed working against real browser sessions during this build.
+**Manual gate status: ready, NOT confirmed done.** `/admin/session` is live and working — paste a session code (shown in the consent-gate footer and site footer) or session_id, see the raw log next to the recomputed canonical views/modes. The agent confirmed the *tool* works against real browser sessions during this build; that is not the same thing as the author having actually browsed a session and confirmed by hand that view boundaries and modes match what happened, which BUILD_BRIEF.md §10.14 requires and explicitly reserves as the author's own step. See "Gate 0's manual check: still outstanding" below — as of the most recent status check, there is no record anywhere in this file of that walkthrough having happened.
 
 **Open decision, not the agent's to make:** no `LICENSE` file has been chosen for the repo's own code (separate from the ABO dataset's CC BY-NC 4.0 terms in `NOTICE`). Flagged rather than guessed.
 
@@ -192,9 +192,28 @@ fast-skip bootstrap problem, the skew-test fixture). Nothing new since.
 11. Deployed at a URL — **not started**
 12. Consent copy live — **done**, verbatim from `COPY.md`, wired into `ConsentGate.tsx`
 13. `README.md` with screenshots/GIF/§14 — **not started**
-14. **Manual gate**: author confirms view boundaries/modes by hand against a raw event log — **ready**. `/admin/session` is live; paste a code or session_id to see the raw log next to the recomputed canonical views/modes.
+14. **Manual gate**: author confirms view boundaries/modes by hand against a raw event log — tool **ready**, walkthrough **not confirmed done**. See "Gate 0's manual check: still outstanding" below.
 
-**Blocking Gate 0 completion: only #11 (deploy) remains — README is done. Everything else in Gate 0's DoD is done and verified.**
+**Blocking Gate 0 completion: #11 (deploy) and #14 (the author's own manual walkthrough, tool-ready but unconfirmed) both remain open. Everything the agent can complete unilaterally is done and verified; these two are not things the agent can complete on the author's behalf.**
+
+### Gate 0's manual check: still outstanding
+
+Asked directly and answered directly, since BUILD_BRIEF.md is explicit
+that this step does not get skipped and is the author's to do, not the
+agent's: **no, as far as this file's own record goes, it has not been
+done.** The tool (`/admin/session`) has been live and functioning since
+early in Gate 0, and the agent verified the tool itself works correctly
+against real captured sessions — but nowhere in this file, across the
+entire build through Gate 1's closure, is there a record of the author
+having actually opened a session, read the raw event log by hand, and
+confirmed view boundaries and modes against what actually happened.
+Deployment (the original context for "browse the live site") is also
+still blocked on the author's own `flyctl` authentication, but this
+check does not require deployment — it can be done against a local run
+(`docker compose up -d` + local backend + local frontend) exactly as
+easily as against a deployed one. Flagged here explicitly, per
+instruction, rather than letting a two-gate-old open item quietly lapse
+while Gate 2 work proceeds around it.
 
 ---
 
@@ -1239,6 +1258,25 @@ they're what a *perfect* feature can do against this label), and closing
 either gap further is explicitly **not** the next priority — Gate 2
 (recommend, ablate, ship) buys more than further ranker tuning would at
 this point.
+
+**The asymmetry between the two efficiency numbers is itself a finding
+(author's instruction), not incidental to reporting them.** 0.178 vs
+0.513 is roughly a 3x gap, and it maps onto a real architectural split,
+not noise: archetype accuracy is a direct measurement of the
+**signal-weighting vector's** recovery quality (the ridge-regression
+target this whole metric is built from), while interest-ranking rho
+measures the **ranker**, the component the (not-yet-built) **taste
+vector** would sit downstream of for any real recommendation. Read
+plainly: this pipeline currently identifies *who is browsing*
+(archetype) far more reliably than it identifies *what they want*
+(item-level interest). That has a direct consequence for Gate 2's
+recommender, built next: candidate generation / diversity logic that
+leans on archetype-level signal (e.g. price-band and category filtering
+informed by which archetype a session resembles) is on much firmer
+ground than fine-grained exact-cosine ranking within a category is, and
+the recommender should be built and described accordingly — not as if
+the 18%-efficient ranking signal were as trustworthy as the
+51%-efficient archetype signal.
 
 ### 5. Gate 1 is CLOSED
 

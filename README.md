@@ -21,12 +21,16 @@ an online/offline skew test.
 
 **Gate 1 is closed.** A drift-diffusion behavioral simulator, five
 archetypes, a per-mode-conditioned generative process, and a LambdaRank
-ranker recover *signal rather than noise* from simulated browsing
-behavior — a claim that survived a full retraction and rebuild of its
-own evaluation bar and negative control before being trusted. See
+ranker recover interest ranking **reliably against a valid permutation
+control, at roughly 18% of the information the commitment label
+permits** — and separate the five archetypes reliably at roughly 51% of
+that recovery task's own ceiling. Neither of those numbers was allowed
+to stand on its own: the evaluation bar and its negative control were
+both retracted and rebuilt first, because the original versions of both
+turned out not to mean what they claimed to. See
 ["The bar was wrong" below](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both)
-for why that sentence is the actual headline of this project so far, not
-a recovery number. 181 tests, all green.
+— that sequence, not a recovery number, is this project's actual
+headline result so far. 187 tests, all green.
 
 **Gates 2–3 (the recommender, the ablation harness, the admin console)
 are not yet built.** That's the honest state of the project as of this
@@ -77,13 +81,38 @@ historical iterations pass the corrected gate; the pipeline likely had
 recoverable signal from very early on, and no tool available at the time
 could see it.
 
-**The actual result, at the fixed evaluation settings (625/625
-sessions):**
+**The actual result, said honestly before it's said as a table:** the
+pipeline recovers interest ranking reliably against a valid permutation
+control, at roughly 18% of the information the commitment label
+permits. It separates the five behavioral archetypes reliably against
+its own valid control too, at roughly 51% of *that* task's ceiling. A
+passed gate is not the same claim as a strong result, and the efficiency
+numbers — not the pass/fail column — are what say how strong. At the
+fixed evaluation settings (625/625 sessions):
 
-| | achieved | ceiling | efficiency | gate |
+| | achieved | ceiling | efficiency | gate (CI vs. valid control) |
 |---|---|---|---|---|
-| Interest ranking (per-session ρ) | 0.088 [0.059, 0.119] | 0.497 [0.456, 0.535] | 0.178 | pass — CI vs. negative control [-0.032, 0.016] does not overlap |
-| Archetype separation (accuracy) | 0.363 [0.326, 0.400] | 0.518 [0.480, 0.555] | 0.513 | pass — CI vs. chance-level control [0.174, 0.238] does not overlap |
+| Interest ranking (per-session ρ) | 0.088 [0.059, 0.119] | 0.497 [0.456, 0.535] | 0.178 | no overlap — control [-0.032, 0.016] |
+| Archetype separation (accuracy) | 0.363 [0.326, 0.400] | 0.518 [0.480, 0.555] | 0.513 | no overlap — control [0.174, 0.238] |
+
+**The efficiency gap between the two rows is itself a finding, not a
+footnote.** The pipeline is roughly three times better at identifying
+*who* a shopper is (archetype separation, 51% of ceiling) than at
+ranking *what* they want (interest ranking, 18% of ceiling). That maps
+directly onto the two-vector architecture (§11): the **signal-weighting
+vector** — five behavioral-family weights, recovered per session by
+ridge regression — is what archetype separation actually measures, and
+it recovers well. The **taste vector** — the thing that would drive
+ranking and recommendations, built from calibrated per-item interest —
+is downstream of the *ranker*, and the ranker is the 18%-efficient
+piece. In plain terms: this pipeline currently knows much more about
+*which kind of shopper is browsing* than it knows about *which specific
+items that shopper wants*, and a recommender built on top of it should
+be trusted more for archetype-level personalization (e.g. calibrating
+away from a policy that's clearly wrong for a Price-hunter) than for
+fine-grained item ranking within a category. Gate 2's recommender
+(below) is built with that asymmetry in mind, not around it being
+already fixed.
 
 Full sequence, every number, and the exact code for the corrected
 negative control: `STATE.md`'s "Gate 1 closes" section.
