@@ -434,8 +434,6 @@ and modes side by side.
 
 ## License
 
-No `LICENSE` file has been chosen yet for this repository's own code —
-that's the author's call to make, not the agent's, and is flagged as an
-open item in `STATE.md`. `NOTICE` has the full ABO attribution and the
-dataset's CC BY-NC 4.0 terms, which apply to the catalog imagery/metadata
-only, never to the code.
+MIT for this repository's own code — see `LICENSE`. `NOTICE` has the full
+ABO attribution and the dataset's CC BY-NC 4.0 terms, which apply to the
+catalog imagery/metadata only, never to the code.

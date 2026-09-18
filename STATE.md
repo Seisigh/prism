@@ -164,7 +164,7 @@ Gate 0's remaining item: deploy to a URL. Then Gates 1–3 (modeling, simulator,
 
 **Manual gate status: ready, NOT confirmed done.** `/admin/session` is live and working — paste a session code (shown in the consent-gate footer and site footer) or session_id, see the raw log next to the recomputed canonical views/modes. The agent confirmed the *tool* works against real browser sessions during this build; that is not the same thing as the author having actually browsed a session and confirmed by hand that view boundaries and modes match what happened, which BUILD_BRIEF.md §10.14 requires and explicitly reserves as the author's own step. See "Gate 0's manual check: still outstanding" below — as of the most recent status check, there is no record anywhere in this file of that walkthrough having happened.
 
-**Open decision, not the agent's to make:** no `LICENSE` file has been chosen for the repo's own code (separate from the ABO dataset's CC BY-NC 4.0 terms in `NOTICE`). Flagged rather than guessed.
+**Resolved:** MIT `LICENSE` added for the repo's own code, per the author's explicit instruction (separate from the ABO dataset's CC BY-NC 4.0 terms in `NOTICE`, which already pointed at a `LICENSE` file that didn't exist yet — the pre-public audit's one non-clean finding). No longer an open item.
 
 ---
 
