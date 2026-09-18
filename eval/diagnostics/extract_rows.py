@@ -25,8 +25,8 @@ from sim.embedding import build_item_vectors
 
 def run_once(sessions_per_condition: int, seed_train: int, seed_holdout: int, shuffle: bool) -> dict:
     item_vectors = build_item_vectors()
-    train = build_corpus(item_vectors, sessions_per_condition, seed=seed_train, shuffle_utility=shuffle)
-    holdout = build_corpus(item_vectors, sessions_per_condition, seed=seed_holdout, shuffle_utility=shuffle)
+    train = build_corpus(item_vectors, sessions_per_condition, seed=seed_train, relabel_world=shuffle)
+    holdout = build_corpus(item_vectors, sessions_per_condition, seed=seed_holdout, relabel_world=shuffle)
 
     rankers = train_per_mode_rankers(train)
     holdout_rows = [row for cs in holdout for row in cs.rows]

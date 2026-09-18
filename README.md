@@ -15,14 +15,78 @@ with every brand string scrubbed from served text; a full storefront IA
 consent-gated browser telemetry SDK emitting all 25 event types over
 WebSocket; idempotent ingest into Postgres with live session state in
 Redis; a `features/` library implementing the canonical item-view
-boundary rule, the browsing-mode stratum, sealed feature windows, and the
-eight Gate 0 signals — all with a build-failing leakage audit and an
-online/offline skew test. 98 tests, all green.
+boundary rule, the browsing-mode stratum, sealed feature windows, and a
+full behavioral signal set — all with a build-failing leakage audit and
+an online/offline skew test.
 
-**Gates 1–3 (the ranker, the simulator, the recommender, the ablation
-harness) are not yet built.** That's the honest state of the project as
-of this commit — see `STATE.md` for exactly what's done, what's open, and
-why, kept up to date as the build continues.
+**Gate 1 is closed.** A drift-diffusion behavioral simulator, five
+archetypes, a per-mode-conditioned generative process, and a LambdaRank
+ranker recover *signal rather than noise* from simulated browsing
+behavior — a claim that survived a full retraction and rebuild of its
+own evaluation bar and negative control before being trusted. See
+["The bar was wrong" below](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both)
+for why that sentence is the actual headline of this project so far, not
+a recovery number. 181 tests, all green.
+
+**Gates 2–3 (the recommender, the ablation harness, the admin console)
+are not yet built.** That's the honest state of the project as of this
+commit — see `STATE.md` for exactly what's done, what's open, and why,
+kept up to date as the build continues.
+
+## The bar was wrong, a negative control that couldn't fail, and what replaced both
+
+This is the most credible result in the repository, and it isn't a
+recovery number. It's a diagnostic sequence, and it's presented here
+first because it demonstrates more about whether this project's claims
+can be trusted than any single metric would.
+
+**What happened, in order:**
+
+1. Gate 1's original Definition of Done required Spearman ρ > 0.6
+   between predicted interest and true utility on held-out simulated
+   sessions. Three rounds of real engineering — coupling the simulator's
+   motor model to its own decision process, adding signals that could
+   read *direction* rather than just magnitude of behavior, fixing a
+   real polarity bug — moved that number from 0.074 to 0.099 to 0.011.
+2. Bootstrapped confidence intervals on those three numbers showed they
+   were not statistically distinguishable from how much a "negative
+   control" moved over the same three iterations. Read plainly: **three
+   iterations of engineering were steering on a number that couldn't
+   tell signal from noise.**
+3. Checking the negative control itself found the actual bug: it
+   permuted which item a behavior belonged to and then evaluated
+   against that *same* permutation — a self-consistent replay under a
+   relabeled catalog, not a test that could ever detect leakage. It had
+   never been capable of failing.
+4. A ceiling analysis (three oracle probes: perfect features against the
+   true utility, perfect features against the actual weak label, real
+   features against true utility) found the deeper problem: **the 0.6
+   bar sat above what the pipeline's own label can support even with a
+   perfect model** — a perfect feature against the real commitment
+   label tops out around 0.33 per-session ρ. The bar was unreachable,
+   not demanding.
+
+**What replaced both:** the fixed-magnitude bar was retracted. Gate 1
+now closes on a non-overlap test — the real condition's confidence
+interval must not overlap a *corrected* negative control's (predictions
+held fixed, only the evaluation target shuffled, so any nonzero result
+under the shuffle is leakage by construction) — paired with an
+*efficiency* number (achieved performance relative to the measured
+ceiling, not against an arbitrary target). Retroactively, all three
+historical iterations pass the corrected gate; the pipeline likely had
+recoverable signal from very early on, and no tool available at the time
+could see it.
+
+**The actual result, at the fixed evaluation settings (625/625
+sessions):**
+
+| | achieved | ceiling | efficiency | gate |
+|---|---|---|---|---|
+| Interest ranking (per-session ρ) | 0.088 [0.059, 0.119] | 0.497 [0.456, 0.535] | 0.178 | pass — CI vs. negative control [-0.032, 0.016] does not overlap |
+| Archetype separation (accuracy) | 0.363 [0.326, 0.400] | 0.518 [0.480, 0.555] | 0.513 | pass — CI vs. chance-level control [0.174, 0.238] does not overlap |
+
+Full sequence, every number, and the exact code for the corrected
+negative control: `STATE.md`'s "Gate 1 closes" section.
 
 ## Screens
 
@@ -46,10 +110,10 @@ web/         React storefront
 server/
   ingest/    WebSocket + HTTP endpoints, Postgres + Redis
   features/  window-spec'd signal functions — the leakage-critical module
-  models/    ranker + profile updater (Gate 1, not yet built)
+  models/    taste vector (Gate 1); profile updater (Gate 2, not yet built)
   recommender/  candidate gen, rerank, ablation (Gate 2, not yet built)
-sim/         behavioral simulator (Gate 1, not yet built)
-eval/        replay, recovery metrics, ablation reports (Gate 2, not yet built)
+sim/         behavioral simulator: five archetypes, drift-diffusion + motor coupling (Gate 1, done)
+eval/        corpus, ranker, signal-weighting recovery, negative control, ceiling probes, diagnostics (Gate 1, done)
 tests/
 ```
 
@@ -115,13 +179,17 @@ the offline-recomputed canonical views and modes side by side.
 > feature windows, and the leakage audit are built and tested before any
 > model exists to leak into — that ordering is deliberate.
 >
-> **What this does not show yet.** Calibrated interest estimates,
-> recommendations, or anything about behavioral archetypes — the ranker,
-> the simulator, and the recommender (BUILD_BRIEF.md §§11–13) are not
-> built. There is no latency number to report because there is no
-> real-time scoring path yet. This README will be updated with those
-> numbers once they exist, not before. Once a ranker ablation exists:
-> browsing mode's measured contribution to it will be partly a
+> **What this does not show yet.** Recommendations, an ablation over the
+> behavioral signal families, or anything about real (non-simulated)
+> shoppers — the recommender and the ablation harness (BUILD_BRIEF.md
+> §12) are not built. There is no latency number to report because there
+> is no real-time scoring path deployed yet. This README will be updated
+> with those numbers once they exist, not before. The ranker recovery
+> numbers above (efficiency 0.178 for interest ranking, 0.513 for
+> archetype separation) are the honest, ceiling-relative headline —
+> see ["The bar was wrong"](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both)
+> for why a fixed target number isn't reported instead. Browsing mode's
+> measured contribution to a future ablation will be partly a
 > consequence of how the simulator itself was parameterized (see
 > `STATE.md`'s per-mode DDM priors) — those per-mode priors are stated
 > modeling assumptions about shopper behavior, not measured facts, so an

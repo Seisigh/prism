@@ -39,7 +39,7 @@ from eval.corpus import build_corpus
 from eval.ranker import SIGNAL_NAMES
 from sim.embedding import build_item_vectors
 
-SESSIONS_PER_CONDITION = 15
+SESSIONS_PER_CONDITION = 25  # fixed (STATE.md's "Process" section) -- never lowered for runtime
 SEED_TRAIN = 0
 SEED_HOLDOUT = 1
 UTILITY_LABEL_GRADES = 30  # near LightGBM's default lambdarank label-mapping cap (~31)
@@ -117,8 +117,8 @@ def run_probe(train, holdout, feature_fn, label_fn, name):
 
 def main():
     item_vectors = build_item_vectors()
-    train = build_corpus(item_vectors, SESSIONS_PER_CONDITION, seed=SEED_TRAIN, shuffle_utility=False)
-    holdout = build_corpus(item_vectors, SESSIONS_PER_CONDITION, seed=SEED_HOLDOUT, shuffle_utility=False)
+    train = build_corpus(item_vectors, SESSIONS_PER_CONDITION, seed=SEED_TRAIN, relabel_world=False)
+    holdout = build_corpus(item_vectors, SESSIONS_PER_CONDITION, seed=SEED_HOLDOUT, relabel_world=False)
     print(f"train sessions={len(train)}, holdout sessions={len(holdout)}")
 
     results = {

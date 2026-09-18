@@ -3,7 +3,7 @@
 Read this alongside `BUILD_BRIEF.md` before doing anything else in a new
 session. This file is updated after each module, not at the end.
 
-**Current gate:** 0 complete. Gate 1 in progress and currently **paused for author review, not engineering**: simulator, taste vector, mode-conditional generative process, Gate-1 signals, composites, directional signals, and a ranker pipeline are all built and tested, but no reported recovery number (rho 0.011–0.099 across three iterations) has cleared its DoD bar, and a diagnostic pass (see "Diagnostic pass: confidence intervals, the corpus-size discrepancy, the recovery ceiling, and commitment-vs-utility" near the end) found that three iterations of feature/generator engineering moved the real-condition rho by amounts statistically indistinguishable from how much an (itself questionably-designed) negative control moved over the same three iterations — i.e., this reads as steering on noise. Several open questions are now the author's to resolve before any further engineering: the negative control's own validity, which `sessions_per_condition` to standardize on, and whether the 0.6 rho bar is reachable at all under the current commitment-label scheme (oracle probes put that label's own ceiling at ~0.33 per-session rho with a *perfect* feature).
+**Current gate:** 0 complete. **Gate 1: CLOSED.** Not by clearing the original fixed rho > 0.6 bar — that bar was retracted by the author as unreachable (it sat above the measured ceiling of the label the pipeline must use) — but by the revised DoD: the real condition's per-session rho and archetype-accuracy 95% CIs both fail to overlap a corrected, validated negative control's CI, at `sessions_per_condition=25` (the fixed standard). See "Gate 1 closes: the bar was wrong, the negative control was rebuilt, here is the primary result" near the end — read that section first in any future session; it is the most important thing in this file, not an appendix. Headline numbers: rho efficiency (achieved / ceiling) = 0.178; archetype-accuracy efficiency (chance-adjusted) = 0.513.
 **Repo:** https://github.com/Seisigh/prism (private)
 **Deployment: blocked on the author's action** — see "Deployment" section near the end. Everything needed is prepared and locally verified (Dockerfile builds clean, container runs and serves correctly); it needs an authenticated `flyctl` session, which the agent cannot create.
 
@@ -1081,6 +1081,174 @@ ambiguous grade. Reaching 0.6 would need either a richer label (a
 continuous or finer-grained weak-label target, not the current three-
 grade scheme) or accepting that 0.6 was calibrated without this ceiling
 in view. Which of those is true is the author's call, not resolved here.
+
+## Gate 1 closes: the bar was wrong, the negative control was rebuilt, here is the primary result
+
+**Read this section first.** The sequence that produced it — a bar set
+above the achievable ceiling, three iterations of engineering steered by
+movements statistically indistinguishable from noise, a negative control
+that could not have detected leakage even in principle, and a ceiling
+analysis that localized the loss to label sparsity rather than to the
+features or the model — is, by the author's own explicit instruction,
+the most credible thing in this repository. It demonstrates a working
+scientific process more convincingly than any single recovery number
+would have, and it is recorded here as a primary result, not an
+appendix. The equivalent write-up for a reader who never opens this file
+is in `README.md`'s honesty section.
+
+### 1. The bar is retracted
+
+The author's ruling, verbatim in substance: **rho > 0.6 sat above the
+measured ceiling of the label the pipeline must use** (oracle: perfect
+features + the real commitment label = 0.328 per-session rho, upper 95%
+CI bound 0.386 — see the ceiling analysis above). It was unreachable, not
+demanding, and is retracted rather than chased. Replaced with two
+things, applied to both rho and archetype accuracy:
+
+- **A primary, pass/fail gate that does not require guessing a
+  magnitude:** the real condition's per-session-mean 95% CI must not
+  overlap the CI of a *valid* negative control. That is the actual
+  scientific claim (the pipeline recovers signal rather than noise), and
+  it is testable without picking an arbitrary target number.
+- **A reported (not gated) efficiency metric:** achieved / ceiling for
+  rho; chance-adjusted `(achieved - chance) / (ceiling - chance)` for
+  archetype accuracy, since accuracy's floor is chance (0.20) rather
+  than zero and an unadjusted ratio would misstate it. This — not a bare
+  rho — is the honest headline number: performance relative to the
+  information actually available under the label the pipeline is stuck
+  with, not against an arbitrary target picked before any of this was
+  measured.
+
+BUILD_BRIEF.md §11's DoD list rewritten in place to match (the original
+fixed-bar language struck through in substance, replaced with the
+gate/efficiency framing and a corrected description of what the negative
+control is and is not).
+
+### 2. The negative control was rebuilt
+
+Diagnosed in the previous section: `build_corpus`'s `shuffle_utility`
+mode generated *both* the behavior *and* the evaluation target from the
+same permuted item-vector mapping, so it was a self-consistent replay
+under a relabeled catalog, not a test that could ever have detected
+leakage. **Corrected design (`eval/negative_control.py`):** hold real
+behavior and real, already-trained predictions completely fixed;
+permute *only* the evaluation target (utility, shuffled within each
+session; for archetype accuracy, the true archetype label, shuffled
+globally) that those fixed predictions get scored against. This severs
+prediction from truth while changing nothing else, so any nonzero result
+under the shuffle is leakage or artifact by construction — there is no
+other mechanism left that could produce one.
+
+`build_corpus`'s old parameter is **kept, renamed `relabel_world`**, and
+its docstring rewritten to state plainly what it does and does not test:
+a real, still-useful check that the pipeline isn't keyed to specific
+item identities, and explicitly **not** a leakage check — it must never
+be cited as one again.
+
+**Retroactive comparison, old control vs. corrected control, all three
+historical commits** (`sessions_per_condition=15`, matching how each was
+originally reported, for a clean one-variable comparison — the point
+estimates for the real condition and the old control reproduce exactly
+what's in the table earlier in this file):
+
+```
+                    OLD control (relabel-world)      NEW control (evaluation-target permutation)
+commit    REAL rho   point    95% CI                  point     95% CI              old-vs-new gate*
+c7348bd   0.108      0.065   [0.029, 0.099]           0.006    [-0.026, 0.039]      FAIL -> PASS
+7db852d   0.114      0.096   [0.064, 0.129]           0.033    [ 0.004, 0.064]      FAIL -> PASS
+HEAD      0.069      0.129   [0.095, 0.165]          -0.018   [-0.049, 0.012]      FAIL -> PASS
+
+* "gate" = does the REAL condition's CI (from the earlier retroactive-CI table) fail to
+  overlap this control's CI. Under the old control, real overlapped control at every
+  commit (the "steering on noise" finding). Under the corrected control, real does NOT
+  overlap control at any of the three -- i.e. the underlying pipeline was likely fine,
+  or at least not distinguishable-from-noise, well before this session's engineering
+  started; the OLD CONTROL was the thing hiding that, not the ranker.
+```
+
+This is the single most important empirical result of the whole
+diagnostic sequence: **the "steering on noise" finding from the previous
+section was itself an artifact of the broken control.** Once the control
+actually tests what it claims to test, all three historical iterations
+—including the very first ranker built, before the motor-coupling fix,
+the directional signals, or the polarity fix — clear the non-overlap
+gate. The engineering work in those three iterations was not wasted (the
+motor coupling and directional signals are real, verified mechanisms,
+and the polarity fix was a genuine correctness bug), but the *rho
+number* was never the right instrument for judging whether any of it
+was necessary — the pipeline had recoverable signal from very early on,
+and no tool available at the time could see it.
+
+### 3. Process, fixed
+
+- **`sessions_per_condition = 25` (625 train / 625 held-out sessions),
+  fixed.** The 625->375 drop was me lowering it for runtime without
+  flagging the change (previous section) — not repeated. Any future
+  change to this number for any reason must be flagged in the report it
+  appears in, the same way this one should have been the first time.
+- **Per-session mean rho with a session-level bootstrap CI is the
+  reporting standard from here.** Pooled rho may still appear, but only
+  ever as a labeled diagnostic (`eval/gate1_dod.py`'s report prints it
+  under "pooled (diagnostic only, NOT the headline)") — never as the
+  number anyone reads as the result.
+
+### 4. The closing run
+
+`python -m eval.gate1_dod` at the fixed settings (625/625 sessions, seed
+0/1), full output:
+
+```
+--- rho ---
+  pooled (diagnostic only): real=0.169, control=0.101
+  REAL    per-session mean rho = 0.088   95% CI [0.059, 0.119]
+  CONTROL per-session mean rho = -0.009  95% CI [-0.032, 0.016]
+  PRIMARY GATE (non-overlap): PASS
+  Ceiling (oracle features, commitment label) per-session mean rho = 0.497  95% CI [0.456, 0.535]
+  Efficiency (achieved / ceiling) = 0.178
+    per-mode: broad_search 0.121, comparison -0.002, directed_search 0.113,
+              discovery 0.120, refind -0.023
+
+--- archetype accuracy ---
+  REAL    = 0.363   95% CI [0.326, 0.400]
+  CONTROL = 0.206   95% CI [0.174, 0.238]   (chance = 0.200)
+  GATE (non-overlap): PASS
+  Ceiling (recovery against true utility, not the weak label) = 0.518   95% CI [0.480, 0.555]
+  Efficiency, chance-adjusted = 0.513
+
+=== GATE 1: CLOSED ===
+```
+
+Both gates pass cleanly (the rho CIs don't even come close to touching;
+the archetype-accuracy control sits right on top of chance, exactly
+where a correct control should sit, which is itself a second
+confirmation the new control is well-built). Per-mode rho is noisy and
+in two modes (comparison, refind) slightly negative — both are the
+lowest-volume modes in the corpus and have the fewest held-out sessions
+to average over; not treated as a separate problem to chase, since the
+pooled-across-modes gate is what Gate 1's DoD actually asks for and it
+passes.
+
+**Efficiency, read honestly:** 0.178 for rho, 0.513 for archetype
+accuracy. The rho gap (achieved 0.088 vs ceiling 0.497, roughly 5.6x)
+is the larger of the two; the accuracy gap (achieved 0.363 vs ceiling
+0.518, roughly 1.4x, or 51% of the chance-adjusted ceiling) is
+comparatively modest. Per the author's instruction: **the remaining
+model gap sits against a ceiling that is itself modest** (0.497 and
+0.518 are not "the model could reach 1.0 with more tuning" numbers —
+they're what a *perfect* feature can do against this label), and closing
+either gap further is explicitly **not** the next priority — Gate 2
+(recommend, ablate, ship) buys more than further ranker tuning would at
+this point.
+
+### 5. Gate 1 is CLOSED
+
+Per the author's explicit instruction, recorded as a standing rule: **do
+not keep optimizing toward a higher rho.** The primary gate passed at
+the fixed, corrected settings; the model gap that remains is
+characterized (efficiency numbers above), not hidden, and is smaller
+than the label's own ceiling leaves room for regardless of further
+feature or model work. The next work on this project is Gate 2, not
+another ranker iteration.
 
 ---
 

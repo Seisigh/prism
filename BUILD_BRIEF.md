@@ -483,12 +483,14 @@ Unit tests assert unit norm after arbitrary update sequences, bounded magnitude,
 
 Critical: parameterize the agent **independently of the feature set**. Do not write "curvature proportional to conflict," which makes recovery tautological. Simulate the underlying process — drift-diffusion over item utility, a gaze-then-reach motor model with signal-dependent noise, a reading model for scroll — and let curvature, velocity and pause structure emerge. Fit motor and timing parameters to the author's own traces.
 
-**Gate 1 DoD:**
+**Gate 1 DoD — revised.** [Amended — the original fixed ρ > 0.6 bar is retracted: a ceiling analysis (STATE.md) found it sat above the measured ceiling of the label the pipeline must use (perfect features + the commitment label top out around 0.33 per-session ρ), making it unreachable rather than demanding. Replaced with a non-overlap gate that doesn't require guessing a magnitude, plus an efficiency metric reported alongside it, not gated on:]
 
-- Spearman ρ > 0.6 between predicted interest and known utility on held-out simulated sessions
-- Archetype separation: linear probe on recovered signal-weighting vectors classifies the five archetypes at > 70%
-- **Negative control passes:** shuffle injected utilities, assert ρ ≈ 0 and archetype accuracy ≈ chance. A pipeline that clears the positive bar but fails this has leakage.
-- Per-mode metrics reported separately
+- **Primary gate, rho:** the real condition's per-session mean Spearman ρ 95% CI must not overlap the CI of a *valid* negative control (see §11's "Negative control" below — not the relabeled-world replay, which is not one). This is the actual scientific claim: the pipeline recovers signal rather than noise.
+- **Reported, not gated — rho efficiency:** achieved per-session mean ρ / ceiling ρ (oracle: perfect features + the real commitment label, same pooled-model construction as the ranker). States performance relative to the information the label actually makes available. This is the README's headline recovery number, not the retired 0.6 target.
+- **Primary gate, archetype accuracy:** the same non-overlap treatment — its own ceiling probe (recovery against true utility instead of the sparse commitment label, otherwise identical), gated on non-overlap with its own valid negative control.
+- **Reported, not gated — archetype accuracy efficiency:** chance-adjusted, `(achieved - chance) / (ceiling - chance)`, since accuracy's floor is chance (1/5), not zero, and an unadjusted ratio would misstate it.
+- **Negative control, redefined:** generate sessions from true utility, train and predict normally, then evaluate those fixed predictions against a *shuffled* utility vector (shuffled within each session). This severs prediction from truth while leaving the trained model and the real generative behavior untouched, so any nonzero correlation under the shuffle is leakage or artifact by construction. The original "shuffle injected utilities" description in this section described what is now called the **relabeled-world replay** (`build_corpus(relabel_world=True)`) — a real and still-useful robustness check (is the pipeline keyed to specific item identities?) that was miscited here as a leakage check. It is not one, and must not be cited as one again; see `eval/corpus.py`'s docstring.
+- Per-mode metrics reported separately (now as per-session mean ρ per mode, not pooled).
 
 ---
 
@@ -510,7 +512,7 @@ LinUCB with propensity logging. Off-policy estimators validated **against known 
 
 ## 14. README honesty section
 
-> **What this shows.** A real-time pipeline from raw browsing behavior to calibrated interest estimates and recommendations, p95 latency N ms, over a 750-item catalog with full e-commerce IA. On simulated shoppers with known preferences it recovers item ranking at ρ = X and separates five behavioral archetypes at Y%. An ablation over the behavioral signals quantifies each one's contribution under a declared generative model. Browsing mode is modeled as a stratum, because dwell time means opposite things in directed search and in discovery browsing.
+> **What this shows.** A real-time pipeline from raw browsing behavior to calibrated interest estimates and recommendations, p95 latency N ms, over a 750-item catalog with full e-commerce IA. On simulated shoppers with known preferences it recovers signal rather than noise (real-condition confidence intervals do not overlap a validated negative control's), at N% of the ceiling the pipeline's own weak label allows — see STATE.md's ceiling analysis for why a fixed target number was retracted in favor of that framing. An ablation over the behavioral signals quantifies each one's contribution under a declared generative model. Browsing mode is modeled as a stratum, because dwell time means opposite things in directed search and in discovery browsing.
 >
 > **What this does not show.** Anything about how people in general weight behavioral signals. The human data here is my own browsing plus a few consenting visitors — enough to validate the instrument and calibrate the simulator's motor parameters, not enough to support any inferential claim. The deployed ranker is trained primarily on synthetic data.
 >

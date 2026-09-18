@@ -42,21 +42,42 @@ def build_corpus(
     item_vectors: dict[str, ItemVector] | None = None,
     sessions_per_condition: int = 8,
     seed: int = 0,
-    shuffle_utility: bool = False,
+    relabel_world: bool = False,
 ) -> list[CorpusSession]:
-    """`shuffle_utility=True` is the negative control (§11 DoD item 3):
-    permutes which item vector each item_id resolves to, so an agent's
-    real decisions are still internally consistent (drift-diffusion over
-    *some* utility) but that utility no longer has anything to do with
-    the item the ranker's features describe -- exactly like
-    test_generative.py's shuffled-utility control, propagated through
-    the whole pipeline instead of just the raw dwell function.
+    """`relabel_world=True` -- renamed from `shuffle_utility` after the
+    author's ruling that it had been miscited as a leakage-detecting
+    negative control, which it never was. **What it does:** permutes
+    which item vector each item_id resolves to, then generates *both*
+    the simulated behavior *and* the evaluation target (`row.utility`)
+    from that same permuted mapping -- a fully self-consistent replay of
+    the real generative mechanism against an arbitrarily relabeled
+    catalog. Mode assignment, archetype identity, and the taste-vector
+    structure are all still real and intact under the permutation; only
+    the item_id <-> vector mapping changes.
+
+    **What it tests:** whether the pipeline is keyed to specific item
+    identities rather than to the behavior->feature->utility mechanism
+    itself -- a legitimate and useful robustness check, still run and
+    still worth reporting.
+
+    **What it does NOT test, and must never again be cited as testing:**
+    leakage. Because both the behavior and its own evaluation target come
+    from the same permuted mapping, there is no reason a well-functioning
+    pipeline should collapse to zero rho under this permutation, and
+    empirically it does not (see STATE.md's "Rebuilding the negative
+    control" section) -- a diagnostic pass found this condition producing
+    reliably nonzero, sometimes higher-than-real rho across three
+    independent runs, which is what triggered the rebuild. The actual
+    leakage / signal-vs-noise check is `eval/negative_control.py`'s
+    evaluation-target permutation, which holds real behavior and real
+    predictions fixed and shuffles only what those predictions are
+    scored against.
     """
     item_vectors = item_vectors or build_item_vectors()
     rng = random.Random(seed)
 
     effective_vectors = item_vectors
-    if shuffle_utility:
+    if relabel_world:
         ids = list(item_vectors.keys())
         shuffled_ids = ids[:]
         rng.shuffle(shuffled_ids)

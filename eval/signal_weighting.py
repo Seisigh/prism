@@ -67,28 +67,34 @@ def _weak_labels(rows: list[ViewFeatureRow]) -> np.ndarray:
     return np.array(out)
 
 
-def fit_population_prior(rows: list[ViewFeatureRow]) -> np.ndarray:
+def fit_population_prior(rows: list[ViewFeatureRow], label_fn=_weak_labels) -> np.ndarray:
     """One ridge fit pooling every training-split view, regardless of
     session or archetype -- the population starting point every
     session's online update shrinks toward before its own evidence
-    accumulates."""
-    X, y = _design_matrix(rows), _weak_labels(rows)
+    accumulates.
+
+    `label_fn` defaults to the production weak label. The only other
+    caller is `eval/gate1_dod.py`'s archetype-accuracy *ceiling probe*,
+    which passes a true-utility-based label to isolate how much the
+    weak label itself costs recovery -- never used to change what the
+    deployed recovery target is."""
+    X, y = _design_matrix(rows), label_fn(rows)
     model = Ridge(alpha=RIDGE_ALPHA_PRIOR)
     model.fit(X, y)
     return model.coef_
 
 
-def recover_session_signal_weighting(rows: list[ViewFeatureRow], prior: np.ndarray) -> np.ndarray:
+def recover_session_signal_weighting(rows: list[ViewFeatureRow], prior: np.ndarray, label_fn=_weak_labels) -> np.ndarray:
     """A session's own ridge fit, shrunk toward `prior` in proportion to
     how little evidence the session has (few views -> lean on the prior;
     many views -> lean on the session's own fit) -- the "shrunk toward
     the prior by evidence count" half of §11's spec. With fewer than 3
     views there's nothing to fit at all, so the prior is returned as-is,
     mirroring the taste vector's own "population prior below 3 scored
-    views" rule."""
+    views" rule. See `fit_population_prior` re: `label_fn`."""
     if len(rows) < 3:
         return prior.copy()
-    X, y = _design_matrix(rows), _weak_labels(rows)
+    X, y = _design_matrix(rows), label_fn(rows)
     model = Ridge(alpha=RIDGE_ALPHA_SESSION)
     model.fit(X, y)
     session_fit = model.coef_
