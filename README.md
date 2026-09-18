@@ -117,6 +117,63 @@ already fixed.
 Full sequence, every number, and the exact code for the corrected
 negative control: `STATE.md`'s "Gate 1 closes" section.
 
+## What each behavioral signal actually buys you
+
+This is the artifact the brief for this project calls the most
+interesting one in the repository, and it's worth reading as a story
+rather than a table. The question it answers: of the seventeen
+behavioral signals feeding the ranker — dwell, scroll, pointer velocity,
+trajectory curvature, the two directional signals added after Gate 1's
+recovery stalled — which ones is the model actually using, and does
+removing any of them make it *better*?
+
+**One signal is carrying almost the entire result.** Item dwell —
+`log(1 + seconds visible)`, the single oldest and simplest signal in the
+project — accounts for essentially all of the ranker's positive
+contribution on its own. Removing it costs 0.078 of per-session ρ;
+removing dwell's entire family (which also includes viewport time, hover
+time, and focused-idle time) costs 0.074 — meaning the other three
+attention signals add almost nothing on top of dwell alone. Four
+signals — category breadth, hover time on target, query specificity,
+and viewport time — contribute *exactly* zero: LightGBM found no useful
+split on any of them, so removing them changes the model's predictions
+not at all. They aren't wrong to have built; they're evidence that this
+model, at this data volume, isn't using everything it's given, and
+that's a more honest thing to know than not measuring it.
+
+**Two families actively hurt.** This is the finding worth not looking
+away from. The `comparison` family (revisit count, near-substitute
+co-view count) and the `directional` family (the two signals built
+specifically to give the ranker a way to read *which* item a trajectory
+leaned toward — [see above](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both))
+both show a **reliably negative** contribution: the model does
+measurably *better* on held-out sessions with them removed, not worse.
+That directly contradicts what their individual correlation with the
+outcome suggested in isolation. The likely explanation — a signal
+correlating with the label on its own is not the same claim as it
+improving a multi-feature tree ensemble's generalization, and with the
+current training volume the ranker may be fitting noise in these
+signals' sparser availability patterns rather than real structure — is
+recorded as a hypothesis, not verified further, since re-tuning the
+ranker to fix it was explicitly ruled out once Gate 1 closed. Both
+things are true at once: the directional signals are a real,
+mechanistically-grounded addition to the generative model, and they are
+*currently* net-harmful to this particular trained ranker. The ablation
+is what makes the second half of that visible instead of assumed away
+by the first half.
+
+| Family | Contribution (Δρ if removed) | 95% CI | Reading |
+|---|---|---|---|
+| attention | **+0.074** | [+0.051, +0.096] | clearly helps — almost entirely dwell |
+| motor_conflict | −0.004 | [−0.021, +0.013] | no measurable effect |
+| exploration | −0.014 | [−0.031, +0.002] | no measurable effect |
+| comparison | −0.025 | [−0.042, −0.008] | reliably hurts |
+| directional | −0.042 | [−0.068, −0.018] | reliably hurts |
+
+Full per-signal table, the paired-bootstrap methodology, and the raw
+numbers behind this narrative: `STATE.md`'s "Ablation harness" section.
+Reproduce it with `python -m eval.ablation`.
+
 ## Screens
 
 | | |

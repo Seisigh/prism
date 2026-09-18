@@ -1290,27 +1290,95 @@ another ranker iteration.
 
 ---
 
-## Gate 2 — noted, not started
+## Gate 2 — in progress
 
-`BUILD_BRIEF.md` was replaced with a version adding **§6.7 (admin
-console)** and revising Gate 2's bullet list to include it
+`BUILD_BRIEF.md` §6.7 (admin console) and its revised Gate 2 bullet list
 ("Admin console per §6.7: sessions list, session signal table, live
 view, event log viewer, signal distributions, new-profile control.
-Behind auth."). This is a **Gate 2 deliverable** — not started, per the
-author's explicit instruction to just note it here rather than begin it
-now. Gate 0's manual-gate event-log viewer (`/admin/session`, already
-built) is explicitly called out in §6.7 item 4 as the predecessor this
-console's own event-log view builds on ("This is the tool Gate 0's
-manual check requires, so it exists before this section is built") —
-so that piece is already done and just needs auth + the other four views
-wrapped around it when Gate 2 starts.
+Behind auth.") are the spec for the admin console piece. Gate 0's
+manual-gate event-log viewer (`/admin/session`, already built) is
+explicitly called out in §6.7 item 4 as the predecessor this console's
+own event-log view builds on — so that piece is already done and just
+needs auth + the other four views wrapped around it.
 
-Also new: **§2.1a**, Windows-specific local environment guidance (Python
-3.12 explicitly, not the 3.14 also on PATH; Postgres/Redis in Docker;
-PowerShell not bash for anything committed). Already compliant — `.venv`
-was created against Python 3.12.10, Postgres/Redis already run via the
-existing `docker-compose.yml`, and nothing committed to the repo is a
-`.sh` script.
+Also noted earlier: **§2.1a**, Windows-specific local environment
+guidance (Python 3.12 explicitly, not the 3.14 also on PATH;
+Postgres/Redis in Docker; PowerShell not bash for anything committed).
+Already compliant — `.venv` was created against Python 3.12.10,
+Postgres/Redis already run via the existing `docker-compose.yml`, and
+nothing committed to the repo is a `.sh` script.
+
+### Ablation harness — built and run (`eval/ablation.py`)
+
+Per §12: "For each non-excluded signal and each family, retrain and
+remeasure recovery with it removed. Output a ranked contribution table."
+A single pooled model (no per-mode split, same rationale as the ceiling
+probes — isolating one variable's marginal contribution doesn't need
+five separate per-mode fits), paired bootstrap CIs on the contribution
+(baseline rho - ablated rho, per held-out session, resampled together —
+tighter and more honest than treating the two conditions as independent
+when they share every other source of variance). 24 model fits total (1
+baseline + 17 signal-ablations + 5 family-ablations excluding
+`availability`, which is a structural meta-signal, not a behavioral
+family) at the fixed 625/625 scale.
+
+```
+Baseline per-session mean rho (all 17 signals) = 0.1542
+
+Family contribution (rho lost when the whole family is removed):
+  attention       +0.0736  [+0.0506, +0.0958]  (4 signals)  <- clearly helps
+  motor_conflict  -0.0041  [-0.0212, +0.0130]  (5 signals)  <- ~no effect
+  exploration     -0.0143  [-0.0311, +0.0018]  (4 signals)  <- ~no effect
+  comparison      -0.0246  [-0.0424, -0.0083]  (2 signals)  <- reliably HURTS
+  directional     -0.0424  [-0.0679, -0.0180]  (2 signals)  <- reliably HURTS
+
+Top signal contributions:
+  item_dwell                    [attention]    +0.0783  [+0.0592, +0.0958]  <- dominant
+  (category_breadth, hover_dwell_on_target, query_specificity, viewport_time: exactly
+   0.0000, zero-width CI -- LightGBM found no useful split on any of these at all;
+   removing them changes nothing because the baseline model was already ignoring them)
+  trajectory_curvature_auc      [motor_conflict] -0.0261  [-0.0429, -0.0090]
+  near_substitute_coview_count  [comparison]     -0.0220  [-0.0379, -0.0070]
+  early_direction_bias          [directional]    -0.0119  [-0.0366, +0.0115]
+```
+
+**Honest read, reported as found rather than reconciled with the
+narrative that would have been more satisfying:** `item_dwell` alone
+accounts for essentially all of the model's positive signal — its
+removal costs almost exactly as much rho as the entire `attention`
+family's removal does (0.078 vs 0.074), meaning the other three
+attention signals (viewport_time, hover_dwell_on_target, focused_idle)
+contribute almost nothing on top of it. More surprising: the
+`comparison` and `directional` families both show a **reliably
+negative** contribution — their CIs exclude zero on the harmful side,
+meaning the model does measurably *better* on held-out data with them
+removed. This directly contradicts the expectation set by the per-signal
+correlation table two sections up, where `early_direction_bias` and
+`direction_lock_in_speed` were the two most-correlated raw signals with
+`committed` individually. The likely reconciliation, not verified
+further here since re-tuning the ranker to fix it is explicitly out of
+scope after Gate 1's closure: a signal correlating with the outcome
+*marginally* (in isolation) is not the same claim as it *improving a
+17-feature tree ensemble's held-out generalization* — with the current
+per-signal training volume, LightGBM may be fitting noise in the
+directional/comparison signals' sparser availability patterns rather
+than real structure. This is presented as a finding, the same way the
+efficiency asymmetry was: the directional signals are a real,
+mechanistically-grounded discovery (STATE.md's earlier section, and the
+generative-model coupling that made them possible), and they are
+*currently* net-harmful to the deployed ranker's held-out accuracy. Both
+of those are true at once, and the ablation is what makes the second one
+visible instead of assumed away.
+
+Four signals (`category_breadth`, `hover_dwell_on_target`,
+`query_specificity`, `viewport_time`) are dead weight in the current
+model — zero measured contribution, in either direction. Not removed
+from the registry (they may become informative with a different
+training regime, and removing a signal because the current model isn't
+using it would be the same kind of after-the-fact adjustment the
+mode-priors and composite-family decisions were explicitly protected
+against), but flagged here as an honest finding rather than left
+implicit in a table only a script author would parse closely.
 
 ---
 
