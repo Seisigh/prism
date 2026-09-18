@@ -30,12 +30,26 @@ both retracted and rebuilt first, because the original versions of both
 turned out not to mean what they claimed to. See
 ["The bar was wrong" below](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both)
 — that sequence, not a recovery number, is this project's actual
-headline result so far. 187 tests, all green.
+headline result so far.
 
-**Gates 2–3 (the recommender, the ablation harness, the admin console)
-are not yet built.** That's the honest state of the project as of this
-commit — see `STATE.md` for exactly what's done, what's open, and why,
-kept up to date as the build continues.
+**Gate 2 is built.** An epsilon-greedy recommender over the taste
+vector (cosine candidates, MMR diversity, a permanent random-policy
+slice for offline evaluation); the ablation harness above; a real
+live-scoring path from a raw event batch to a pushed profile update
+over the same WebSocket connection; and the five-view admin console
+(§6.7). Building the last two surfaced two real bugs worth naming here
+rather than only in `STATE.md`: the admin console's live view didn't
+work at all in local dev (a missing Vite dev-proxy flag left its
+WebSocket stuck connecting forever), and the live-scoring path itself
+could silently drop a session's update under a specific, common
+ordering condition — see
+["Live scoring, the admin console, and the load test"](#live-scoring-the-admin-console-and-the-load-test)
+below for both, and the real p95 latency number now that there's a
+scoring path to measure. Deployment is prepared (`Dockerfile`,
+`fly.toml`) but deliberately deferred pending a hosting decision, not
+blocked on a bug — see `STATE.md`. 235 tests, all green. That's the
+honest state of the project as of this commit; `STATE.md` is kept up
+to date as the build continues.
 
 ## The bar was wrong, a negative control that couldn't fail, and what replaced both
 
@@ -174,6 +188,93 @@ Full per-signal table, the paired-bootstrap methodology, and the raw
 numbers behind this narrative: `STATE.md`'s "Ablation harness" section.
 Reproduce it with `python -m eval.ablation`.
 
+## Live scoring, the admin console, and the load test
+
+The recovery numbers above are all against the simulator. This section
+is about the separate question of whether the *real-time* path — a
+visitor's actual browsing, scored and pushed back to their own profile
+panel live — actually works, and it's reported the same way as
+everything above: real numbers from actually running it, including the
+two real bugs that running it (not reading the code) found.
+
+**The live path works, end to end, verified against a real browsing
+session** — not just tests: opened the storefront, browsed several
+product pages, and watched the profile panel go from its empty state to
+ranked, human-readable dimensions ("Trusts items with more reviews,"
+"Leans toward premium brands," ...), updating live as more items were
+viewed. Getting there and then building the admin console's live view
+on top of it surfaced two real bugs:
+
+1. **The admin console's live view never connected, in local dev,
+   ever.** Every session showed "Disconnected," with no error on either
+   side. Cause: Vite's dev proxy had `ws: true` set only on the `/ws`
+   rule, not on `/api` — and the admin live socket lives at
+   `/api/admin/live/{id}`, so the upgrade request was proxied as plain
+   HTTP and sat in `CONNECTING` forever. One line in `vite.config.ts`;
+   found by the required two-pass screenshot review of the admin
+   console (below), not by reading the code.
+2. **A session's live update could silently vanish** depending on the
+   alphabetical order of the item IDs a shopper happened to browse.
+   `score_session_update` decided "has anything new closed" by looking
+   at the *last* recomputed view — but the function computing those
+   views sorts them by item ID (for the admin console's own grouped
+   display), not by time. Whenever the most-recently-closed view's item
+   ID didn't sort last, the check looked at an already-scored view
+   instead, and the whole update disappeared with no exception and no
+   push. A shopper would just never see that view reflected in their
+   own profile, with nothing in the logs to say why. Found building the
+   load test below, which is exactly the kind of bug a load test is
+   supposed to find and a unit test in isolation would not have (the
+   existing unit tests all happened to use item IDs that already sorted
+   in time order). Fixed, with a regression test that reproduces the
+   exact ordering that hid it.
+
+**The admin console** (Sessions list, Session detail, Event log,
+Signal distributions, Live view) got the same two-pass,
+two-viewport screenshot review as the storefront, per this project's
+own standing review discipline — arguably more scrutiny, since it's
+the surface a technical reader spends the most time on. That review is
+what caught bug #1 above, plus half a dozen smaller-but-real issues:
+a table that silently clipped three columns (including the only link
+to the live view) at narrow widths with no scrollbar; a `cursor:
+pointer` that silently never applied because of a CSS-Modules class
+name mismatch; a mobile nav row that never actually wrapped because a
+`width: 100%` lost to a sibling rule's `flex-basis: 0` on specificity;
+payload columns that looked truncated with no indication they were;
+and a signal-distributions view that fetched each histogram bin's value
+range but never showed it, undercutting the panel's own stated
+purpose. Full list, each with what was actually wrong and the fix:
+`STATE.md`'s "Admin console" section. Screenshots, both viewports:
+
+| | |
+|---|---|
+| Sessions list | ![Sessions list](docs/screens/admin-sessions-list-768.jpg) |
+| Session detail | ![Session detail](docs/screens/admin-session-detail-1440.jpg) |
+| Event log | ![Event log](docs/screens/admin-event-log-1440.jpg) |
+| Signal distributions | ![Signal distributions](docs/screens/admin-signal-distributions-1440.jpg) |
+| Live view | ![Live view](docs/screens/admin-live-view-1440.jpg) |
+
+**The load test** (`python -m eval.load_test`) measures §12's actual
+budget — p95 < 250ms from a semantic trigger (here, a batch that closes
+a canonical view) to the pushed update on the same connection — against
+the real local dev stack, over real WebSocket connections, not against
+the simulator and not against a deployed URL (deployment is deferred;
+a local run measures the application's own latency, which is what the
+budget is about, without conflating in network latency to whatever
+region a deployed instance would run in):
+
+| run | triggers | dropped | p50 | p95 | p99 |
+|---|---|---|---|---|---|
+| 20 sessions × 5 triggers | 100 | 0 | 39.9ms | 73.4ms | 79.1ms |
+| 40 sessions × 8 triggers | 320 | 0 | 78.5ms | 138.4ms | 161.1ms |
+
+**PASS on both runs**, with real headroom — but said plainly rather
+than as a bare pass: this is ordinary dev hardware with a single
+backend process and a handful of concurrent sessions, not production
+infrastructure under production load, and it's the number *after*
+fixing the dropped-trigger bug above, which for a while made "0
+dropped" the more important column than the latency one.
+
 ## Screens
 
 | | |
@@ -196,8 +297,8 @@ web/         React storefront
 server/
   ingest/    WebSocket + HTTP endpoints, Postgres + Redis
   features/  window-spec'd signal functions — the leakage-critical module
-  models/    taste vector (Gate 1); profile updater (Gate 2, not yet built)
-  recommender/  candidate gen, rerank, ablation (Gate 2, not yet built)
+  models/    taste vector (Gate 1); trained ranker + live scoring (Gate 2)
+  recommender/  candidate gen, MMR rerank, epsilon-greedy policy (Gate 2)
 sim/         behavioral simulator: five archetypes, drift-diffusion + motor coupling (Gate 1, done)
 eval/        corpus, ranker, signal-weighting recovery, negative control, ceiling probes, diagnostics (Gate 1, done)
 tests/
@@ -246,14 +347,23 @@ Copy `.env.example` to `.env` first — the defaults already match
 .venv\Scripts\python.exe -m pytest tests/ -q
 ```
 
+### The admin console
+
+Password-gated (`ADMIN_PASSWORD` in `.env`; fails closed if unset),
+mounted at `/admin`, not linked from the storefront. Five views:
+Sessions, Session detail, Event log, Signal distributions, Live view —
+see ["Live scoring, the admin console, and the load test"](#live-scoring-the-admin-console-and-the-load-test)
+above for what building and reviewing it actually found.
+
 ### The manual gate
 
 Gate 0's Definition of Done includes one check that's the author's to do,
 not the agent's: browse a session, open the raw event log, and confirm
 by hand that view boundaries and modes match what actually happened. The
-tool for that is live at `/admin/session` — paste the session code shown
-in the site footer, or a session_id, to see the raw event log next to
-the offline-recomputed canonical views and modes side by side.
+tool for that is the admin console's Event log view (`/admin/event-log`)
+— paste the session code shown in the site footer, or a session_id, to
+see the raw event log next to the offline-recomputed canonical views
+and modes side by side.
 
 ## Honesty section
 
@@ -265,12 +375,14 @@ the offline-recomputed canonical views and modes side by side.
 > feature windows, and the leakage audit are built and tested before any
 > model exists to leak into — that ordering is deliberate.
 >
-> **What this does not show yet.** Recommendations, an ablation over the
-> behavioral signal families, or anything about real (non-simulated)
-> shoppers — the recommender and the ablation harness (BUILD_BRIEF.md
-> §12) are not built. There is no latency number to report because there
-> is no real-time scoring path deployed yet. This README will be updated
-> with those numbers once they exist, not before. The ranker recovery
+> **What this does not show yet.** Anything about real (non-simulated)
+> shoppers at any meaningful volume — the recommender, the ranker, and
+> the ablation above are all trained and measured against the
+> simulator; the live-scoring path and its 250ms budget are verified
+> against real telemetry, but from a handful of manually-driven
+> sessions and a load test's synthetic WebSocket traffic, not real
+> visitors at scale, and not against a deployed instance (deployment is
+> prepared but deliberately deferred — see `STATE.md`). The ranker recovery
 > numbers above (efficiency 0.178 for interest ranking, 0.513 for
 > archetype separation) are the honest, ceiling-relative headline —
 > see ["The bar was wrong"](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both)
