@@ -1380,6 +1380,59 @@ mode-priors and composite-family decisions were explicitly protected
 against), but flagged here as an honest finding rather than left
 implicit in a table only a script author would parse closely.
 
+### Recommender core logic — built (`server/recommender/`); NOT wired into the live storefront yet
+
+Built and tested: `catalog_view.py` (loads the context catalog joined
+with `sim/embedding.py`'s 7-dim taste-vector space and real
+`price_cents`/`category` fields, with a declared fixed price-band
+bucketing — not fit to the catalog's own distribution, so it doesn't
+shift if the catalog is rebuilt), `mmr.py` (exact cosine ranking +
+standard maximal-marginal-relevance diversity reranking), `policy.py`
+(epsilon-greedy with a permanent, deterministically-hashed random-policy
+session fraction per §12, and exact propensity logging for every slot in
+every slate — including random-policy sessions — per §7.2's "log
+propensities... including while the policy is random"). 24 new tests,
+all passing.
+
+**What this is not yet: a live recommender.** BUILD_BRIEF.md's Gate 2
+bullet ("epsilon-greedy recommender over the context catalog") and the
+load-test requirement ("p95 < 250ms from trigger to pushed update")
+both presuppose a real-time scoring path that does not exist anywhere in
+this repository yet. Concretely, still missing:
+
+- **A trained ranker persisted anywhere.** Every ranker trained so far
+  (`eval/ranker.py`, `eval/ablation.py`, `eval/gate1_dod.py`) exists only
+  for the duration of a Python process running an offline script against
+  simulated sessions. There is no `model.save_model(...)` call, no
+  loaded-at-startup model in `server/`, and no versioning
+  (`model_version`, referenced by §7.2's `rec_impression` schema)
+  anywhere.
+- **Real-event feature extraction.** `eval/features.py`'s pipeline runs
+  against `SimulatedSession` objects; nothing extracts the same 17
+  signals from a *real*, live-ingested session's stored raw events.
+  `server/features/replay.py` recomputes canonical views/modes from real
+  events (that's the Gate 0 skew-test / admin event-log-viewer path),
+  but does not run `signals.py`/`signals_gate1.py`/`signals_directional.py`
+  against the result the way `eval/features.py` does for simulated data.
+- **Calibration.** The taste vector's own spec (`server/models/taste_vector.py`)
+  takes `p_i`, a *calibrated* interest probability — nothing converts a
+  raw LightGBM ranker score into that scale. §11 doesn't specify the
+  calibration method; not guessed at here.
+- **The live wiring**: ingest -> real feature extraction -> ranker
+  score -> calibration -> `TasteVectorTracker.observe_view` -> a
+  WebSocket push to the client -> `server/recommender`'s candidate
+  generation being called with that live vector -> a `rec_impression`
+  event logged with real propensities.
+
+None of this is a small gap — it's most of what would make "the
+recommender" real rather than a well-tested set of pure functions.
+Flagged explicitly here rather than either skipping it silently or
+building a fragile, undertested live path just to claim the bullet is
+checked off. **Next**: build the live wiring (ranker persistence +
+calibration + real feature extraction + the WebSocket push path), since
+the epsilon-greedy policy, MMR, and candidate filtering above have
+nothing to operate on without it.
+
 ---
 
 ## Deployment
