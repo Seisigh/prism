@@ -20,11 +20,13 @@ FROM python:3.12-slim AS backend
 WORKDIR /repo
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libjpeg62-turbo libwebp7 && rm -rf /var/lib/apt/lists/*
+    libjpeg62-turbo libwebp7 libgomp1 && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
 COPY catalog/ ./catalog/
 COPY server/ ./server/
+COPY sim/ ./sim/
+COPY eval/ ./eval/
 RUN pip install --no-cache-dir -e .
 
 COPY assets/ ./assets/
@@ -33,6 +35,14 @@ COPY --from=web-build /repo/web/dist ./web/dist
 # Bakes the ~810-item catalog (metadata + resized thumbnails) into the
 # image. Network access required at build time.
 RUN python -m catalog.build
+
+# Trains and bakes the per-mode ranker + calibrator artifacts in the
+# same way (server/models/train_ranker.py) -- ~2 minutes at the fixed
+# 625-session scale, needs the catalog built first (sim/embedding.py
+# reads data/catalog.json). A build artifact, gitignored, exactly like
+# the catalog above -- see server/models/train_ranker.py's docstring for
+# why this runs at build time rather than on every container start.
+RUN python -m server.models.train_ranker
 
 ENV APP_ENV=production
 EXPOSE 8000

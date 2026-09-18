@@ -1380,7 +1380,7 @@ mode-priors and composite-family decisions were explicitly protected
 against), but flagged here as an honest finding rather than left
 implicit in a table only a script author would parse closely.
 
-### Recommender core logic — built (`server/recommender/`); NOT wired into the live storefront yet
+### Recommender core logic — built (`server/recommender/`); live scoring path now wired (see next section)
 
 Built and tested: `catalog_view.py` (loads the context catalog joined
 with `sim/embedding.py`'s 7-dim taste-vector space and real
@@ -1424,33 +1424,98 @@ this repository yet. Concretely, still missing:
   generation being called with that live vector -> a `rec_impression`
   event logged with real propensities.
 
-None of this is a small gap — it's most of what would make "the
+None of this was a small gap — it was most of what would make "the
 recommender" real rather than a well-tested set of pure functions.
-Flagged explicitly here rather than either skipping it silently or
-building a fragile, undertested live path just to claim the bullet is
-checked off. **Next**: build the live wiring (ranker persistence +
-calibration + real feature extraction + the WebSocket push path), since
-the epsilon-greedy policy, MMR, and candidate filtering above have
-nothing to operate on without it.
+
+### Live scoring path — built, and verified against a real browser session, not just tests
+
+Closes every item the section above flagged as missing:
+
+- `server/models/train_ranker.py` + `ranker_store.py`: trains and
+  persists per-mode LightGBM boosters plus a per-mode Platt-scaling
+  calibrator (raw score -> P(committed), fit **in-sample** — a
+  documented simplification, not a held-out calibration split) to
+  `server/models/artifacts/` (gitignored, a build artifact like the
+  catalog). Loaded once per process; returns `None` rather than a
+  fabricated score for an untrained mode.
+- `server/features/live.py`: the real-telemetry counterpart to
+  `eval/features.py`. Same signal registry, same window-sealing
+  discipline, real stored Postgres event rows as the data source instead
+  of a `SimulatedSession`. `early_direction_bias` and
+  `direction_lock_in_speed` always return `None` here — real telemetry
+  has no event carrying DOM element positions
+  (`accept_pos`/`reject_pos`), an honest, structural gap, not
+  synthesized.
+- `server/ingest/live_scoring.py`: recomputes a session's canonical
+  views from its **full** real event log at every trigger (§9.2: "not
+  incrementally folded... removes online/offline divergence at the
+  root"), scores every not-yet-scored closed view, folds each into the
+  session's Redis-persisted taste vector in chronological order, and
+  returns the push payload.
+- `server/ingest/routes.py`: calls the above after every event batch and
+  pushes the result over the same WebSocket connection, wrapped per
+  §7.4 ("telemetry never breaks the UI") — a scoring failure is logged
+  and swallowed, never drops the connection.
+- SDK (`transport.ts`, `index.ts`, `types.ts`): a WebSocket message
+  listener dispatched to registered `onProfileUpdate` callbacks.
+  `ProfilePanel.tsx`: renders the real taste vector (top dimensions,
+  ranked by weight, plain human-readable labels) once 3+ views are
+  scored — the panel's pre-existing empty state and 3-view progress
+  dots are unchanged below that threshold.
+
+**Verified live**, not just by tests: ran the local dev stack, browsed
+Home & Furniture, opened five product detail pages, and watched the
+profile panel go from the empty state to "Based on 10 items you've
+looked at this session" with real, ranked dimension bars ("Trusts items
+with more reviews," "Drawn to highly-rated items," "Leans toward premium
+brands," ...), continuing to update as more items were viewed (20 by the
+end of the session). No errors in the backend log during the whole
+session. Two real bugs found and fixed in the process, not by code
+review: the local dev backend port didn't match `web/vite.config.ts`'s
+proxy target (a test-setup mistake, not a product bug); the Docker image
+build failed with `OSError: libgomp.so.1: cannot open shared object
+file` the first time the new `RUN python -m server.models.train_ranker`
+step was added, because LightGBM needs the OpenMP runtime and the slim
+base image doesn't include it — fixed by adding `libgomp1` to the
+Dockerfile's apt-get line, confirmed by a clean rebuild.
+
+**Not built in this pass, noted rather than assumed away:** a
+`/api/recommendations` endpoint actually calling
+`server/recommender/policy.py` with a session's live taste vector, and a
+storefront rail UI consuming it. The SDK already has
+`trackRecImpression()` wired and ready (built earlier, unused until now)
+for whenever that endpoint exists. The core scoring/push path was the
+higher-priority gap and is what this section closes.
 
 ---
 
 ## Deployment
 
-**Prepared and locally verified, not yet live** — this needs the
-author's own authenticated `flyctl` session and Fly.io account (billing,
-Postgres/Redis provisioning), which the agent cannot create.
+**Prepared and locally verified twice over; blocked on Fly.io billing,
+not on flyctl auth anymore.** `flyctl` is now authenticated as the
+author's own account (`alvinw.seisigh@gmail.com`) — that blocker from
+earlier in the build is resolved. `flyctl apps create prism-storefront`
+was attempted and failed with: *"We need your payment information to
+continue! Add a credit card or buy credit:
+https://fly.io/dashboard/seisigh/billing"* — Fly.io requires billing
+information on the account before it will create *any* app, even one
+that fits entirely within free-tier-eligible resource sizes. Entering
+payment details is explicitly the author's own action, not the agent's,
+per the standing rule against handling financial credentials — flagged
+here rather than attempted.
 
-- `Dockerfile` — multi-stage: builds `sdk/` + `web/` (Node), then a Python stage that installs the backend, bakes the real 810-item catalog in at image-build time (`RUN python -m catalog.build` — needs network access during `docker build`), and serves both the API and the built frontend from one `uvicorn` process (§2's "one FastAPI app, one React app," one process in production too). `server/main.py` now has a production-only static-file + SPA-fallback route (only mounted when `web/dist` exists — dev keeps using Vite's own server).
-- **Verified locally**: built the image from a clean cache twice (confirming the download-race fix above), ran the container against the existing docker-compose Postgres/Redis, confirmed `/api/health`, `/api/home`, `/`, and `/favicon.svg` all serve correctly, and confirmed the `noindex` header is present on every response.
+- `Dockerfile` — multi-stage: builds `sdk/` + `web/` (Node), then a Python stage that installs the backend, bakes the real catalog in at image-build time (`RUN python -m catalog.build` — needs network access during `docker build`), **now also bakes the trained per-mode ranker + calibrator artifacts in the same way** (`RUN python -m server.models.train_ranker`, ~50s in-container — needs the catalog built first, since `sim/embedding.py` reads it), and serves both the API and the built frontend from one `uvicorn` process. Needed `libgomp1` added to the apt-get line — LightGBM's shared library requires the OpenMP runtime, which the slim base image doesn't include by default; the build failed with `OSError: libgomp.so.1: cannot open shared object file` before this was added, a real, now-fixed bug in this build's own Dockerfile change, not a pre-existing issue.
+- **Verified locally, this session**: built the image from a clean cache (confirming both the new `libgomp1` fix and the ranker-training step complete successfully — 748/750 context items resolved, 2 dropped to a transient ABO S3 SSL error, within the pipeline's already-tolerated drop-rate), ran the container against the existing docker-compose Postgres/Redis, confirmed `/api/health` returns 200 immediately on a cold container start (meaning the baked-in ranker artifacts load correctly at process startup, not just at build time).
 - `fly.toml` — app config, `shared-cpu-1x` / 512MB, `auto_stop_machines` so it doesn't run (or cost) anything while idle.
 
 ### What the author needs to do (the agent cannot do this part)
 
+Add a credit card at the URL flyctl gave above, then either ask the
+agent to continue (the remaining steps are all things the agent *can*
+run once billing is on the account) or run them directly:
+
 ```powershell
-# flyctl is already installed (winget install --id Fly-io.flyctl)
-flyctl auth login          # opens a browser — needs the author's account
-flyctl launch --no-deploy  # confirms/adjusts fly.toml, picks a real app name
+flyctl apps create prism-storefront
 flyctl postgres create     # managed Postgres — note the connection string
 flyctl redis create        # managed Redis (Upstash) — note the connection string
 flyctl secrets set DATABASE_URL=... REDIS_URL=...
@@ -1461,4 +1526,6 @@ Once that's done, the repo can flip from private to public per the
 kickoff instructions' condition ("stays private until the synthetic-
 content labeling, the consent gate, and noindex are all in place" — all
 three are already true; deploying doesn't change that gate, it's just
-the last item still open).
+the last item still open). The instruction was to keep it deployed from
+here rather than only at the end — noted so this isn't treated as a
+one-time task once billing unblocks it.
