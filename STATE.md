@@ -151,7 +151,7 @@ event-log viewer.
 
 ### Known gaps, flagged rather than silently skipped
 
-- **No admin auth on `/admin/session`.** Acceptable for now (site isn't deployed publicly yet, whole app is noindex + consent-gated), not acceptable to ship deployed without a real auth wall — needs one before the repo goes public per the kickoff instructions' own privacy gate.
+- **No admin auth on `/admin/session`.** Acceptable for now (site isn't deployed publicly yet, whole app is noindex + consent-gated), not acceptable to ship deployed without a real auth wall — needs one before the repo goes public per the kickoff instructions' own privacy gate. **[Resolved in Gate 2 — see "Admin console backend" below, then hardened further in the close-out pass's "Admin console authentication" section. No longer an open item.]**
 - **§10.11's 90-day retention purge (`purge_expired_sessions`) isn't wired to a scheduler.** No cron/deployment scheduler exists yet at this point in the build.
 - **The skew test uses a hand-scripted fixture, not a replayed real session**, because there's no deployed traffic yet to pull a real session from. A live-traffic version is a Gate 1+ follow-up once the site is actually deployed and has sessions to replay.
 - **The category-nav-click proxy in `replay.py`** (see above) is a real, documented, non-zero source of online/offline mode skew for the one case it can't see (a category page reached without a nav-strip click).
@@ -1853,3 +1853,72 @@ honesty section. Not fixed by adding detail views to `sim/session.py` —
 that changes the generative model (a decision this project has
 repeatedly reserved for the author, e.g. the DDM priors, the motor-model
 coupling) and is out of scope here.
+
+### Admin console authentication: already built in Gate 2, one real gap found and closed
+
+Asked to implement §6.7 admin auth as the last pre-public code blocker —
+turned out `server/ingest/admin_auth.py`/`admin_routes.py` already
+implement all of it, committed back in Gate 2 (`5828220`, "Admin console
+backend: auth, sessions list, signal table, distributions, live view"):
+single password from `ADMIN_PASSWORD`, a signed session cookie (HMAC-
+SHA256, constant-time compare, 12h TTL), no user accounts, fails closed
+with no password configured, every `/api/admin/*` route except `/login`
+and `/whoami` behind `Depends(require_admin_session)`, and the
+`/api/admin/live/{id}` WebSocket checking the session cookie and closing
+with code 4401 **before** `accept()` — not just after, which is the
+version of this bug that actually matters (an accepted-then-closed
+socket can still leak a frame or two; this never accepts). `/admin` is
+mounted as its own React tree in `main.tsx`, entirely separate from the
+storefront's `App`/nav — structurally, not just by omission, there's
+nowhere a public-facing link to it could get added by accident. Already
+in `.env.example` with placeholders, real values only in the gitignored
+`.env`.
+
+**One real gap, found reviewing it, not assumed away:**
+`admin_session_secret` had a hardcoded fallback
+(`"prism-dev-admin-secret-change-in-production"`) baked into
+`server/config.py`, directly contradicting the fail-closed philosophy
+the very next line's comment (and `admin_password`) already followed.
+Concretely: this repo is public. A deployment that set `ADMIN_PASSWORD`
+but forgot `ADMIN_SESSION_SECRET` would silently sign every session
+cookie with a value anyone could read on GitHub — an attacker doesn't
+need the password at all, just `_sign(str(int(time.time())))` computed
+locally with the known default, to mint a cookie `require_admin_session`
+accepts. Fixed: `admin_session_secret` is now `str | None = None`, same
+as `admin_password`; `check_password` requires **both** to be configured
+before accepting anything (so `login()` never reaches
+`create_session_cookie_value()` with a password set but no secret);
+`verify_session_cookie` independently fails closed the same way
+(defense in depth — it's also called from the WS handshake and
+`/whoami`, not only after `check_password`); `_sign` raises rather than
+silently signing with an empty/falsy secret, closing the specific
+bypass where an unconfigured secret could make a hand-crafted
+`"<timestamp>."` cookie trivially match an empty signature. Three new
+regression tests in `tests/ingest/test_admin_auth.py` cover exactly
+this (secret missing → password check fails, previously-issued cookie
+stops verifying the moment the secret is unset, and the empty-signature
+edge case specifically).
+
+**Test coverage extended** (`tests/ingest/test_admin_routes.py`) from
+two example routes to all four real ones
+(`sessions`, `sessions/{id}/signals`, `signal-distributions`,
+`new-profile`) parametrized so a new route added later without its own
+`Depends(require_admin_session)` fails this suite by omission, plus two
+new WebSocket tests — no cookie, and a cookie signed under a
+not-configured secret — both asserting the server closes with 4401
+before `accept()`. 23/23 admin tests pass.
+
+**Verified live**, not just by tests: real backend, `curl` with no
+cookie against `/api/admin/sessions`, `/signal-distributions`, and a
+`POST /api/admin/new-profile` — all three `401 {"detail":"admin
+authentication required"}`. Wrong password → `401`. Correct password →
+`200` plus a cookie that a follow-up authenticated request actually
+succeeds with (`200`, real session list back). No sitemap exists in
+this project to keep `/admin` out of (the whole site is already blanket
+`noindex, nofollow`, both the HTTP header on every response and the
+SPA's `<meta>` tag — `/admin` inherits that, nothing admin-specific
+needed).
+
+**No longer an open item — the last pre-public code blocker is closed.**
+What remains is entirely outside code: Fly.io billing (deployment) and
+the Gate 0 manual walkthrough (the author's own step).

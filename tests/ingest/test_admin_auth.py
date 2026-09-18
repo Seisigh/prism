@@ -38,3 +38,27 @@ def test_session_cookie_rejects_missing_or_malformed():
     assert admin_auth.verify_session_cookie(None) is False
     assert admin_auth.verify_session_cookie("") is False
     assert admin_auth.verify_session_cookie("no-dot-here") is False
+
+
+def test_check_password_rejects_when_secret_not_configured(monkeypatch):
+    """A missing signing secret must fail closed exactly like a missing
+    password — not fall back to a value baked into this public repo."""
+    monkeypatch.setattr(admin_auth.settings, "admin_password", "correct-horse")
+    monkeypatch.setattr(admin_auth.settings, "admin_session_secret", None)
+    assert admin_auth.check_password("correct-horse") is False
+
+
+def test_verify_session_cookie_rejects_when_secret_not_configured(monkeypatch):
+    # A cookie signed while a secret WAS configured must stop verifying
+    # the moment the secret is unset — never trust a stale signature.
+    value = admin_auth.create_session_cookie_value()
+    monkeypatch.setattr(admin_auth.settings, "admin_session_secret", None)
+    assert admin_auth.verify_session_cookie(value) is False
+
+
+def test_verify_session_cookie_never_trivially_matches_an_empty_signature(monkeypatch):
+    """Regression: _sign() must never be able to return an empty string
+    that a hand-crafted "<timestamp>." cookie could trivially match."""
+    monkeypatch.setattr(admin_auth.settings, "admin_session_secret", None)
+    issued_at = str(int(time.time()))
+    assert admin_auth.verify_session_cookie(f"{issued_at}.") is False

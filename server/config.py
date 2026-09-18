@@ -28,11 +28,15 @@ class Settings(BaseSettings):
 
     # §6.7: "behind authentication in every environment including local:
     # a single password read from the environment, a signed session
-    # cookie, no user accounts." No default for the password -- a
-    # deployment that never set one should fail closed (admin_auth.py
-    # refuses every login attempt), not fall back to a guessable value.
+    # cookie, no user accounts." No default for either the password or
+    # the signing secret -- a deployment that never set one should fail
+    # closed (admin_auth.py refuses every login attempt), not fall back
+    # to a guessable value. A hardcoded secret default is worse than a
+    # hardcoded password default: this repo is public, so anyone could
+    # read it and forge a valid signed session cookie without ever
+    # knowing the real password.
     admin_password: str | None = None
-    admin_session_secret: str = "prism-dev-admin-secret-change-in-production"
+    admin_session_secret: str | None = None
 
 
 settings = Settings()

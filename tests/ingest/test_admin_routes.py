@@ -3,6 +3,7 @@ through the real FastAPI app -- auth is the load-bearing thing to prove
 actually works, not just the pure functions it's built from."""
 import pytest
 import redis.asyncio as redis
+from fastapi.testclient import TestClient
 from httpx import ASGITransport, AsyncClient
 
 from server.config import settings
@@ -32,7 +33,11 @@ async def _redis_or_skip():
 
 @pytest.fixture(autouse=True)
 def _set_admin_password(monkeypatch):
+    # Set explicitly rather than relying on .env having real values —
+    # this suite must prove auth works from its own fixtures, not from
+    # whatever happens to be in the environment it runs in.
     monkeypatch.setattr(settings, "admin_password", "test-password-123")
+    monkeypatch.setattr(settings, "admin_session_secret", "test-session-secret")
 
 
 async def _client():
@@ -99,3 +104,47 @@ async def test_new_profile_requires_authentication():
     async with await _client() as client:
         resp = await client.post("/api/admin/new-profile")
         assert resp.status_code == 401
+
+
+# Every /api/admin/* route except /login and /whoami (which deliberately
+# answers {"authenticated": false} rather than throwing) must reject an
+# unauthenticated request with 401 — checked directly against each route,
+# not inferred from a couple of examples, since this is the exact failure
+# mode ("hidden on the client, open on the server") auth exists to close.
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("GET", "/api/admin/sessions"),
+        ("GET", "/api/admin/sessions/00000000-0000-0000-0000-000000000000/signals"),
+        ("GET", "/api/admin/signal-distributions"),
+        ("POST", "/api/admin/new-profile"),
+    ],
+)
+async def test_every_admin_endpoint_requires_authentication(method, path):
+    async with await _client() as client:
+        resp = await client.request(method, path)
+        assert resp.status_code == 401
+
+
+def test_live_view_websocket_rejects_without_a_session_cookie():
+    with pytest.raises(Exception) as exc_info:
+        with TestClient(app).websocket_connect(
+            "/api/admin/live/00000000-0000-0000-0000-000000000000"
+        ):
+            pass
+    # Starlette raises WebSocketDisconnect with the close code the server
+    # sent (4401) when the handshake's own code closes it before accept().
+    assert getattr(exc_info.value, "code", None) == 4401
+
+
+def test_live_view_websocket_rejects_a_cookie_signed_with_no_secret_configured(monkeypatch):
+    # Same forged-cookie shape a real attacker would try against a
+    # deployment that forgot to set ADMIN_SESSION_SECRET.
+    monkeypatch.setattr(settings, "admin_session_secret", None)
+    with pytest.raises(Exception) as exc_info:
+        with TestClient(app).websocket_connect(
+            "/api/admin/live/00000000-0000-0000-0000-000000000000",
+            cookies={COOKIE_NAME: "1234567890."},
+        ):
+            pass
+    assert getattr(exc_info.value, "code", None) == 4401

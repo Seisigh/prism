@@ -24,7 +24,14 @@ SESSION_TTL_SECONDS = 60 * 60 * 12  # 12 hours
 
 
 def _sign(value: str) -> str:
-    return hmac.new(settings.admin_session_secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
+    secret = settings.admin_session_secret
+    if not secret:
+        # No signing key configured. Never fall back to a fixed value —
+        # this repo is public, so a fallback baked into source would let
+        # anyone forge a session without the password. Callers must check
+        # settings.admin_session_secret before relying on this.
+        raise RuntimeError("admin_session_secret is not configured")
+    return hmac.new(secret.encode("utf-8"), value.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
 def create_session_cookie_value() -> str:
@@ -33,6 +40,11 @@ def create_session_cookie_value() -> str:
 
 
 def verify_session_cookie(value: str | None) -> bool:
+    if not settings.admin_session_secret:
+        # Fails closed exactly like a missing password below, rather
+        # than signing/verifying against a default that would ship
+        # readable inside this repo.
+        return False
     if not value or "." not in value:
         return False
     issued_at, signature = value.split(".", 1)
@@ -46,10 +58,14 @@ def verify_session_cookie(value: str | None) -> bool:
 
 
 def check_password(password: str) -> bool:
-    """Fails closed when no password is configured (`settings.admin_password`
-    is `None`) — an operator who forgot to set one gets a console nobody
-    can log into, never one anybody can, per config.py's own docstring."""
-    if not settings.admin_password:
+    """Fails closed when no password (`settings.admin_password`) or no
+    session-signing secret (`settings.admin_session_secret`) is
+    configured — an operator who forgot to set either gets a console
+    nobody can log into, never one anybody can, per config.py's own
+    docstring. Checked together here so `login()` never reaches
+    `create_session_cookie_value()` (and `_sign`'s RuntimeError) with a
+    correct password but a missing secret."""
+    if not settings.admin_password or not settings.admin_session_secret:
         return False
     return hmac.compare_digest(password, settings.admin_password)
 
