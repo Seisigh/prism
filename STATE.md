@@ -191,7 +191,7 @@ fast-skip bootstrap problem, the skew-test fixture). Nothing new since.
 10. §6.6 review loop, 2 passes/surface, `docs/screens/` — **done** — every surface, real defects found and fixed each pass (see the storefront section above for the list), not just cosmetic tweaks
 11. Deployed at a URL — **not started**
 12. Consent copy live — **done**, verbatim from `COPY.md`, wired into `ConsentGate.tsx`
-13. `README.md` with screenshots/GIF/§14 — **not started**
+13. `README.md` with screenshots/GIF/§14 — **done** — see "Close-out pass" near the end of this file for the GIF and the two remaining 768px screenshots
 14. **Manual gate**: author confirms view boundaries/modes by hand against a raw event log — tool **ready**, walkthrough **not confirmed done**. See "Gate 0's manual check: still outstanding" below.
 
 **Blocking Gate 0 completion: #11 (deploy) and #14 (the author's own manual walkthrough, tool-ready but unconfirmed) both remain open. Everything the agent can complete unilaterally is done and verified; these two are not things the agent can complete on the author's behalf.**
@@ -1671,3 +1671,130 @@ three are already true; deploying doesn't change that gate, it's just
 the last item still open). The instruction was to keep it deployed from
 here rather than only at the end — noted so this isn't treated as a
 one-time task once billing unblocks it.
+
+---
+
+## Close-out pass: remaining storefront screenshots, the profile-panel GIF, and one real bug each
+
+Picking up the two items §10 left open (`README.md`'s GIF, and the two
+missing 768px screenshots) plus a pre-public audit. Two real, previously
+undiscovered things came out of actually doing this rather than just
+capturing images.
+
+### Compare page: a whole-page horizontal scroll at 768px, found and fixed
+
+`docs/screens/compare-768.png` didn't exist yet. Capturing it (Playwright,
+768x900, the real `core-chair-00` near-substitute set) surfaced a genuine
+defect: the comparison grid's `gridTemplateColumns` used a bare `1fr` per
+item column, whose implicit `minmax(auto, 1fr)` floor is each column's
+min-content width. With 5 chair columns + a 160px label column, that
+min-content sum exceeds 768px, and — confirmed by direct measurement
+(`document.scrollingElement.scrollWidth` 839 vs. a 768 viewport, closing
+exactly to 768 only when the grid's own DOM subtree was removed, not when
+wrapped in `overflow-x:auto` or given `overflow-x:hidden` at any ancestor
+level) — that overflow reached the whole document, not just the
+`.tableScroll` wrapper meant to contain it. Scrolling the page (not the
+table) dragged the header, search bar, and PRISM wordmark off-screen at
+768px, the same class of bug the admin console review caught before
+(§"Admin console (§6.7)"), but worse here: nothing was clipped, the whole
+page just became sideways-scrollable. Root-caused, not just clipped
+around: `web/src/pages/Compare/Compare.tsx`'s grid columns now use
+`minmax(0, 1fr)` instead of bare `1fr`, which lets columns actually shrink
+to the available width — at 768px all 5 columns now render at once with
+wrapped text, no horizontal scroll needed at all, and 1440px is pixel-
+identical to before. `docs/screens/compare-768.png` and `-1440.png` both
+recaptured after the fix. `docs/screens/cart-768.png` also captured (no
+defects found there — a clean, real second-pass review, not skipped).
+
+### A significant, real gap found live: the product detail page's own dwell is invisible to the entire measurement pipeline
+
+Found while trying to record the profile-panel GIF the straightforward way
+(browse 5-6 product detail pages, expect 3+ scored views) — it never
+worked; `/api/sessions/{id}/views` stayed empty after visiting six detail
+pages with real dwell time. Traced all the way through, not assumed:
+
+- `server/features/replay.py`'s `_visibility_samples_from_raw` — the
+  function `recompute_session` (used by **both** the offline event-log
+  viewer/skew-test path **and** the live-scoring path,
+  `server/ingest/live_scoring.py`) — builds every `VisibilitySample`
+  exclusively from `view_start`/`view_end` events.
+- `view_start`/`view_end` are emitted **only** by
+  `sdk.registerItemCard`/`unregisterItemCard`, called **only** from
+  `web/src/components/ItemCard/ItemCard.tsx` — i.e. only for grid/rail
+  cards (home, category, search, compare, cart, and the "similar"/"also
+  viewed" rails rendered on a detail page).
+- `web/src/pages/Detail/Detail.tsx` never renders an `ItemCard` for its
+  own product — its gallery (`Gallery.tsx`) has no SDK involvement at
+  all. The detail page instead calls `sdk.trackDetailViewStart`/
+  `trackDetailViewEnd` (confirmed landing in Postgres — 6 `detail_view_start`
+  events in the session used to diagnose this), but **nothing downstream
+  ever reads those two event types** — not `item_view.py`, not
+  `replay.py`, not `live.py`. Grepped for `detail_view_start`/
+  `detail_view_end` outside `sdk/`/`web/`: only `server/ingest/store.py`,
+  `admin_store.py`, and `envelope.py` (storage/display), never the
+  view-computation path.
+
+Net effect: **the single view a shopper is most deliberately engaged
+with — the product they're actually looking at — has never been a
+canonical `ItemView` anywhere in this system, live or offline.** Every
+signal, composite, the ranker, and the taste vector currently learn
+entirely from incidental grid/rail card exposure (scrolling past cards,
+including a detail page's own "similar items" rail) and never from
+looking at the product itself. This likely also explains STATE.md's
+earlier "watched the profile panel go from empty to ranked... 10 items...
+20 by the end" claim above (§"Live scoring path") — those were very
+likely rail-card impressions accumulated while scrolling detail pages,
+not the 5 deliberately-opened products themselves, though that earlier
+session's raw log wasn't kept to confirm which.
+
+**Not fixed here** — this touches the measurement pipeline's core
+contract (§8's "one canonical view function," which `detail_view_start`/
+`detail_view_end` were seemingly meant to feed and don't), which is
+exactly the kind of change this project's own practice reserves for the
+author's decision rather than a unilateral fix during a close-out pass.
+Two shapes a fix could take, for the record: (a) have the Detail page
+also call `registerItemCard` for its own main product element, so it
+flows through the existing `view_start`/`view_end` path unchanged: or
+(b) actually wire `detail_view_start`/`detail_view_end` into
+`_visibility_samples_from_raw` (and its live-path equivalent) as their
+own surface. (a) is the smaller change and reuses a path already proven
+correct; (b) keeps the detail page's existing, already-tested telemetry
+events and event-log-viewer display meaningful rather than orphaned.
+Flagging both rather than picking one.
+
+The GIF itself (`docs/screens/profile-panel-empty-to-ranked.gif`) was
+recorded working **around** this gap, not fixed through it: a fresh
+session, real consent accept, the panel's honest empty state (0/3
+progress), then browsing (scrolling, not clicking into detail pages) the
+Home & Furniture category grid — which does exercise the real
+`registerItemCard` → `view_start`/`view_end` → live-scoring → WebSocket
+push → `ProfilePanel` path end to end — until the panel showed a real
+7-dimension ranked profile ("Based on 9 items you've looked at this
+session," live weights, not placeholder copy). Embedded in `README.md`'s
+Screens section.
+
+### A second review pass on `compare-768.png` found one more real bug: Rating overflow
+
+Picking this work back up in a later session, after the `tableScroll` /
+`minmax(0, 1fr)` fix above landed uncommitted from a different, unprompted
+agent session working the same repo concurrently (verified correct by
+re-deriving and independently confirming the same root cause before
+accepting it — see the commit this section is part of). Re-capturing
+`compare-768.png` against that fix surfaced a second, separate real
+defect the first pass's screenshot didn't catch: each column's Rating
+cell (stars + value + review count) visually overflowed its now-narrower
+~130px grid column and bled into the neighboring column — confirmed by
+cropping and enlarging the captured PNG, not just eyeballing the full
+page. Root cause: `.itemCell` (`Compare.module.css`) is a
+`flex-direction: column` container with no `min-width: 0`, so its flex
+children can't shrink below their own min-content width even though the
+grid track around them already can (the same "auto minimum" trap the
+`tableScroll` fix above solved one level up, recurring one level down).
+`Rating`'s internal row (`Rating.module.css`) also had no `flex-wrap`, so
+overflowing content had nowhere to go but visibly out of its box. Fixed
+with `min-width: 0` on `.itemCell` and `flex-wrap: wrap` on `.rating` —
+the latter changed globally (Rating is also used on `ItemCard` and
+`Detail`, both with ample width, so wrapping only ever activates here).
+Verified live: re-captured `compare-768.png` shows every rating cell
+clean, no overlap, count fully visible on all five columns. 1440px
+unaffected (confirmed — plenty of width, wrap never triggers).

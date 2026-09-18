@@ -94,6 +94,10 @@ def _looks_like_sku(value: str) -> bool:
 
 def _clean(value: str, raw_brand_values: list[str]) -> str:
     value = strip_known_brand_strings(value, raw_brand_values)
+    # Some raw ABO attribute values are snake_case tokens ("spun_polyester")
+    # rather than prose; an underscore is never meaningful in a title, and
+    # left alone it survives `.title()` as a mid-word capital ("Spun_Polyester").
+    value = value.replace("_", " ")
     return value.strip(" -,")
 
 

@@ -70,22 +70,39 @@ export function Compare() {
         <p className={styles.subtitle}>{compare.body}</p>
       </div>
 
-      <div className={styles.table} style={{ gridTemplateColumns: `160px repeat(${visible.length}, 1fr)` }}>
-        {rows.map((row, ri) => (
-          <div className={styles.row} key={ri}>
-            <div className={[styles.cell, styles.labelCell].join(' ')}>{row.label}</div>
-            {visible.map((item) => (
-              <div className={[styles.cell, styles.itemCell].join(' ')} key={item.item_id}>
-                {ri === 0 && (
-                  <button className={styles.removeBtn} onClick={() => setRemoved((s) => new Set(s).add(item.item_id))}>
-                    {compare.remove}
-                  </button>
-                )}
-                {row.render(item)}
-              </div>
-            ))}
-          </div>
-        ))}
+      <div className={styles.tableScroll}>
+        <div
+          className={styles.table}
+          style={{
+            // minmax(0, 1fr), not a bare 1fr (= minmax(auto, 1fr)): a bare
+            // 1fr's implicit auto minimum is each column's min-content
+            // width, which a wide item image/title can push past the
+            // available row width -- the grid then renders wider than
+            // .tableScroll's own box despite overflow-x:auto on it,
+            // dragging the whole page (header included) into a horizontal
+            // scroll at narrow viewports. minmax(0, ...) lets columns
+            // actually shrink to the available width, so .tableScroll's
+            // own scrollbar is what handles a genuinely wide compare set,
+            // not the document itself. Found via the 768px review pass.
+            gridTemplateColumns: `160px repeat(${visible.length}, minmax(0, 1fr))`,
+          }}
+        >
+          {rows.map((row, ri) => (
+            <div className={styles.row} key={ri}>
+              <div className={[styles.cell, styles.labelCell].join(' ')}>{row.label}</div>
+              {visible.map((item) => (
+                <div className={[styles.cell, styles.itemCell].join(' ')} key={item.item_id}>
+                  {ri === 0 && (
+                    <button className={styles.removeBtn} onClick={() => setRemoved((s) => new Set(s).add(item.item_id))}>
+                      {compare.remove}
+                    </button>
+                  )}
+                  {row.render(item)}
+                </div>
+              ))}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )

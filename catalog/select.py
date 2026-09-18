@@ -88,7 +88,10 @@ def _spec_table(candidate: Candidate, brand: str) -> dict[str, str]:
     ):
         v = first_en(field_name)
         if v:
-            spec[label] = v.strip(" -,")[:60]
+            # Some raw ABO attribute values are snake_case tokens
+            # ("spun_polyester", "wood_grain") rather than prose — an
+            # underscore is never meaningful punctuation in served text.
+            spec[label] = v.replace("_", " ").strip(" -,")[:60]
 
     dims = listing.get("item_dimensions")
     if isinstance(dims, dict):

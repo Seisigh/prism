@@ -51,3 +51,9 @@ def test_title_includes_size_when_dimensions_present():
     )
     title = generate_title(listing, "TABLE", random.Random(1))
     assert "3in" in title
+
+
+def test_title_never_leaks_a_raw_snake_case_attribute():
+    listing = _listing(material=[{"language_tag": "en_US", "value": "spun_polyester"}])
+    title = generate_title(listing, "PILLOW", random.Random(1))
+    assert "_" not in title

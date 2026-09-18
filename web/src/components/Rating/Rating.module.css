@@ -1,5 +1,6 @@
 .rating {
   display: inline-flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-1);
   font-size: var(--fs-12);

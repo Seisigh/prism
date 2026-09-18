@@ -61,6 +61,9 @@ Thumbs.db
 .vscode/*
 !.vscode/settings.json
 
+# Local agent tooling config (per-machine, not project config)
+.codex/
+
 # Logs
 *.log
 npm-debug.log*

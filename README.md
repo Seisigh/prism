@@ -277,6 +277,12 @@ dropped" the more important column than the latency one.
 
 ## Screens
 
+The profile panel, live, over one real browsing session — empty state to
+ranked dimensions, no fabricated "updating" animation, this is an actual
+recorded run against the real live-scoring path described above:
+
+![The profile panel going from its empty state to ranked dimensions as a session browses](docs/screens/profile-panel-empty-to-ranked.gif)
+
 | | |
 |---|---|
 | Consent gate | ![Consent](docs/screens/consent-1440.png) |
@@ -284,6 +290,7 @@ dropped" the more important column than the latency one.
 | Search | ![Search](docs/screens/search-1440.png) |
 | Product detail | ![Detail](docs/screens/detail-1440.png) |
 | Compare | ![Compare](docs/screens/compare-1440.png) |
+| Cart | ![Cart](docs/screens/cart-1440.png) |
 
 More surfaces, empty/loading states, and the 768px layouts are in
 [`docs/screens/`](docs/screens/).
