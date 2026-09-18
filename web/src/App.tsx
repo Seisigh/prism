@@ -1,6 +1,5 @@
 import { useState } from 'react'
 import { Route, Routes } from 'react-router-dom'
-import { SessionViewer } from './pages/Admin/SessionViewer'
 import { Banner } from './components/Banner/Banner'
 import { ConsentGate } from './components/ConsentGate/ConsentGate'
 import { Footer } from './components/Footer/Footer'
@@ -51,7 +50,6 @@ function App() {
               <Route path="/checkout" element={<Checkout />} />
               <Route path="/what-gets-recorded" element={<WhatGetsRecorded />} />
               <Route path="/delete-my-data" element={<DeleteMyData />} />
-              <Route path="/admin/session" element={<SessionViewer />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
           </main>

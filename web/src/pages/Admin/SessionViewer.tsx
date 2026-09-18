@@ -1,21 +1,25 @@
-import { useState } from 'react'
+import { useMemo, useState, type CSSProperties } from 'react'
+import shared from './admin-shared.module.css'
 import styles from './SessionViewer.module.css'
 
 /**
- * The Gate 0 manual gate (BUILD_BRIEF.md §10 item 14): "The author can
- * browse one session, open the raw event log, and confirm by hand that
- * view boundaries and modes match what actually happened." This page is
- * that tool — raw events on the left, the offline-recomputed canonical
- * views + modes (server/features/replay.py, the exact same pure
- * functions item_view.py and mode.py are tested against) on the right,
- * so the two can be checked side by side against what was actually done
- * in the browser.
+ * The Gate 0 manual gate (BUILD_BRIEF.md §10 item 14) AND §6.7 item 4,
+ * "Event log viewer": "Raw events, filterable by type, with computed
+ * view boundaries overlaid so the opening and closing of each view is
+ * visible against the underlying events. This is the tool Gate 0's
+ * manual check requires, so it exists before this section is built."
  *
- * Not part of the consumer storefront — no nav link points here, it's a
- * diagnostic the author navigates to directly by code. Gate 0 has no
- * admin auth wall yet (flagged in STATE.md); the whole site is
- * noindex + consent-gated + not yet publicly deployed, so this is an
- * acceptable simplification for now, not a real production admin surface.
+ * Raw events on the left, filterable by type; the offline-recomputed
+ * canonical views + modes (server/features/replay.py, the exact same
+ * pure functions item_view.py and mode.py are tested against) on the
+ * right. The "overlay" half of the spec is the colored left border on
+ * every raw-event row that falls inside a recomputed view's [start, end)
+ * span, in that view's own mode color — the opening and closing of each
+ * view is visible directly against the underlying events, not just
+ * inferable by cross-referencing two separate tables.
+ *
+ * Now part of the admin console (§6.7): behind the same auth wall as
+ * every other view, reachable from the nav as "Event log."
  */
 
 interface RawEvent {
@@ -47,6 +51,7 @@ export function SessionViewer() {
   const [views, setViews] = useState<RecomputedView[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [typeFilter, setTypeFilter] = useState<string>('all')
 
   async function load(input: string) {
     setError(null)
@@ -75,15 +80,34 @@ export function SessionViewer() {
       setViews(viewsData.views)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to load session')
+      setTypeFilter('all')
     } finally {
       setLoading(false)
     }
   }
 
+  const eventTypes = useMemo(() => Array.from(new Set((events ?? []).map((e) => e.type))).sort(), [events])
+  const filteredEvents = useMemo(
+    () => (typeFilter === 'all' ? events : (events ?? []).filter((e) => e.type === typeFilter)),
+    [events, typeFilter],
+  )
+
+  function viewAtTime(t: number): RecomputedView | undefined {
+    return views?.find((v) => t >= v.start && t < v.end)
+  }
+
+  const MODE_BORDER_COLOR: Record<string, string> = {
+    discovery: 'var(--slate)',
+    directed_search: 'var(--primary)',
+    broad_search: 'var(--primary-hover)',
+    comparison: 'var(--warning-ink)',
+    refind: 'var(--savings)',
+  }
+
   return (
-    <div className={styles.page}>
-      <h1 className={styles.title}>Session event-log viewer</h1>
-      <p className={styles.sub}>
+    <div className={shared.page}>
+      <h1 className={shared.title}>Event log</h1>
+      <p className={shared.sub}>
         Raw events (left) against the offline-recomputed canonical views and modes (right) —
         server/features/item_view.py and mode.py run against the stored log, the same pure functions
         the fixture tests exercise.
@@ -119,11 +143,21 @@ export function SessionViewer() {
           <div className={styles.panel}>
             <div className={styles.panelHeader}>
               <span>Raw events</span>
-              <span>{events.length}</span>
+              <span>{filteredEvents?.length ?? 0}</span>
+            </div>
+            <div className={shared.toolbar} style={{ padding: 'var(--sp-2) var(--sp-3)', margin: 0, borderBottom: '1px solid var(--line)' }}>
+              <button className={[shared.filterBtn, typeFilter === 'all' ? shared.active : ''].join(' ')} onClick={() => setTypeFilter('all')}>
+                All types
+              </button>
+              {eventTypes.map((t) => (
+                <button key={t} className={[shared.filterBtn, typeFilter === t ? shared.active : ''].join(' ')} onClick={() => setTypeFilter(t)}>
+                  {t}
+                </button>
+              ))}
             </div>
             <div className={styles.scrollBody}>
-              {events.length === 0 ? (
-                <div className={styles.empty}>No events recorded under this session.</div>
+              {!filteredEvents || filteredEvents.length === 0 ? (
+                <div className={styles.empty}>No events match this filter.</div>
               ) : (
                 <table className={styles.table}>
                   <thead>
@@ -137,22 +171,30 @@ export function SessionViewer() {
                     </tr>
                   </thead>
                   <tbody>
-                    {events.map((e) => (
-                      <tr key={e.event_id}>
-                        <td>{e.seq}</td>
-                        <td>{e.ts_mono.toFixed(0)}</td>
-                        <td>{e.surface}</td>
-                        <td>
-                          {e.mode ? (
-                            <span className={[styles.modeTag, styles[`mode-${e.mode}`]].join(' ')}>{e.mode}</span>
-                          ) : (
-                            '—'
-                          )}
-                        </td>
-                        <td>{e.type}</td>
-                        <td className={styles.payload}>{JSON.stringify(e.payload)}</td>
-                      </tr>
-                    ))}
+                    {filteredEvents.map((e) => {
+                      const overlayView = viewAtTime(e.ts_mono)
+                      return (
+                        <tr
+                          key={e.event_id}
+                          className={overlayView ? styles.overlaid : ''}
+                          style={overlayView ? ({ '--overlay-color': MODE_BORDER_COLOR[overlayView.mode] ?? 'var(--primary)' } as CSSProperties) : undefined}
+                          title={overlayView ? `Inside view: ${overlayView.item_id} (${overlayView.mode})` : undefined}
+                        >
+                          <td>{e.seq}</td>
+                          <td>{e.ts_mono.toFixed(0)}</td>
+                          <td>{e.surface}</td>
+                          <td>
+                            {e.mode ? (
+                              <span className={[styles.modeTag, styles[`mode-${e.mode}`]].join(' ')}>{e.mode}</span>
+                            ) : (
+                              '—'
+                            )}
+                          </td>
+                          <td>{e.type}</td>
+                          <td className={styles.payload}>{JSON.stringify(e.payload)}</td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               )}

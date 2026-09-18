@@ -22,6 +22,7 @@ from server.ingest.store import (
     find_session_ids_by_code,
     get_session_events,
     insert_events,
+    update_session_device,
 )
 
 logger = logging.getLogger("prism.ingest")
@@ -38,6 +39,17 @@ def _parse_batch(raw: list[dict]) -> list[Envelope]:
         except ValidationError as e:
             logger.warning("dropped malformed envelope: %s", e)
     return envelopes
+
+
+async def _capture_device_info(pool, envelopes: list[Envelope]) -> None:
+    """The SDK sends device info exactly once, in the first `page_view`
+    event's payload (sdk/index.ts's `init()`), not in the envelope
+    itself (§7.1 doesn't carry it). Scans every batch for one rather
+    than assuming it's always the very first event a session sends --
+    a retransmit or reconnect could reorder batches at the edges."""
+    for e in envelopes:
+        if e.type == "page_view" and isinstance(e.payload.get("device"), dict):
+            await update_session_device(pool, e.session_id, e.payload["device"])
 
 
 async def _maybe_push_profile_update(websocket: WebSocket, pool, r, session_id: UUID) -> None:
@@ -76,6 +88,7 @@ async def telemetry_ws(websocket: WebSocket, session_id: UUID = Query(...), code
             envelopes = _parse_batch(batch)
             if envelopes:
                 await insert_events(pool, envelopes, r)
+                await _capture_device_info(pool, envelopes)
                 await _maybe_push_profile_update(websocket, pool, r, session_id)
     except WebSocketDisconnect:
         pass
@@ -92,6 +105,7 @@ async def post_events(raw: list[dict], session_id: UUID = Query(...), code: str 
     if envelopes:
         await ensure_session(pool, session_id, code=code)
         await insert_events(pool, envelopes, get_redis())
+        await _capture_device_info(pool, envelopes)
     return {"accepted": len(envelopes)}
 
 

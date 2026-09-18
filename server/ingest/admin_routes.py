@@ -13,11 +13,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
 
+from server.config import settings
 from server.ingest import admin_signals, admin_store
 from server.ingest.admin_auth import COOKIE_NAME, check_password, create_session_cookie_value, require_admin_session, verify_session_cookie
 from server.ingest.db import get_pg_pool, get_redis
 from server.ingest.live_scoring import _load_taste_state
 from server.ingest.store import get_session_events
+from sim.embedding import DIMENSIONS
 
 logger = logging.getLogger("prism.admin")
 router = APIRouter(prefix="/api/admin")
@@ -35,7 +37,14 @@ async def login(body: dict, response: Response):
         create_session_cookie_value(),
         httponly=True,
         samesite="strict",
-        secure=True,
+        # Real bug, found live: an unconditional `secure=True` cookie is
+        # silently dropped by the browser over plain http://, which is
+        # exactly how local dev serves this app -- login would appear to
+        # succeed (200 OK) and then immediately behave as if it hadn't.
+        # `settings.app_env` is "production" only behind the real
+        # deployed https:// origin (fly.toml sets it), so this stays
+        # Secure everywhere it matters and never silently breaks locally.
+        secure=settings.app_env == "production",
         max_age=60 * 60 * 12,
     )
     return {"ok": True}
@@ -124,6 +133,7 @@ async def live_view(websocket: WebSocket, session_id: UUID):
                         "type": "live_update",
                         "new_events": _jsonable(new_events),
                         "taste_vector": list(vector),
+                        "dimensions": list(DIMENSIONS),
                         "scored_view_count": scored_view_count,
                     }
                 )

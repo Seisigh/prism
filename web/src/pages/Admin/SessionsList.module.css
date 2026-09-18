@@ -1,0 +1,23 @@
+.filterGroup {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-right: var(--sp-4);
+  margin-right: var(--sp-2);
+  border-right: 1px solid var(--line-strong);
+}
+
+.filterGroup:last-child {
+  border-right: none;
+  padding-right: 0;
+  margin-right: 0;
+}
+
+.filterGroupLabel {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--slate-soft);
+  margin-right: var(--sp-1);
+}

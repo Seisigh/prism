@@ -1,0 +1,208 @@
+/* Shared primitives across every admin view -- one table style, one tag
+   style, one panel style, so the console reads as one tool rather than
+   five separately-designed pages. Neutrals + the single storefront
+   accent only: the six-color spectrum is reserved for the profile panel
+   (tokens.css) and must not appear here. */
+
+.page {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: var(--sp-6);
+}
+
+.pageHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: var(--sp-6);
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.title {
+  font-size: var(--fs-24);
+  margin-bottom: var(--sp-1);
+}
+
+.sub {
+  color: var(--slate);
+  max-width: var(--measure);
+}
+
+.toolbar {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+  margin-bottom: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.filterBtn {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--slate);
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.filterBtn:hover {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.filterBtn.active {
+  background: var(--primary-tint);
+  border-color: var(--primary);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.panel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.panelHeader {
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--surface-alt);
+  border-bottom: 1px solid var(--line);
+  font-weight: 600;
+  font-size: var(--fs-14);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* `.panel` above is `overflow: hidden` (for its rounded corners), which
+   silently clips any table wider than the panel with no way to reach
+   the rest -- a real defect found live at 768px where three columns,
+   including the only link to Live view, were completely unreachable.
+   `.tableScroll` wraps the `<table>` (not applied to the table itself --
+   `display: block` on the table element broke colSpan rows, which lost
+   the header row's column-width sync and collapsed to a single
+   column's width) so only the table area scrolls horizontally. */
+.tableScroll {
+  overflow-x: auto;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+
+.table th {
+  position: sticky;
+  top: 0;
+  background: var(--surface);
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  color: var(--slate-soft);
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.table td {
+  padding: 10px var(--sp-3);
+  border-bottom: 1px solid var(--line);
+  white-space: nowrap;
+  vertical-align: top;
+}
+
+.modeCount {
+  font-weight: 400;
+  opacity: 0.75;
+  margin-left: 2px;
+}
+
+.table tbody tr {
+  cursor: default;
+}
+
+.table tbody tr.clickable {
+  cursor: pointer;
+}
+
+.table tr:hover td {
+  background: var(--surface-alt);
+}
+
+.modeTag {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.mode-discovery { background: var(--surface-sunken); color: var(--slate); }
+.mode-directed_search { background: var(--primary-tint); color: var(--primary); }
+.mode-broad_search { background: var(--primary-tint); color: var(--primary-hover); }
+.mode-comparison { background: var(--warning-tint); color: var(--warning-ink); }
+.mode-refind { background: var(--savings-tint); color: var(--savings); }
+
+.labelTag {
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  display: inline-block;
+}
+
+.label-committed { background: var(--savings-tint); color: var(--savings); }
+.label-fast_skip { background: var(--danger-tint); color: var(--danger); }
+.label-ambiguous { background: var(--surface-sunken); color: var(--slate); }
+
+.availDot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.availYes { background: var(--savings); }
+.availNo { background: var(--line-strong); }
+
+.empty {
+  padding: var(--sp-8);
+  color: var(--slate-soft);
+  text-align: center;
+}
+
+.loading {
+  padding: var(--sp-8);
+  color: var(--slate-soft);
+  text-align: center;
+}
+
+.errorText {
+  color: var(--danger);
+  padding: var(--sp-4);
+}
+
+.mono {
+  font-family: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: var(--fs-12);
+}
+
+.link {
+  color: var(--primary);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.link:hover {
+  text-decoration: underline;
+}

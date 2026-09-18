@@ -45,6 +45,36 @@ async def ensure_session(
     )
 
 
+async def update_session_device(pool: asyncpg.Pool, session_id: UUID, device: dict) -> None:
+    """Device info (§7.1's envelope doesn't carry it directly; the SDK
+    sends it once, in the first `page_view` event's payload) arrives
+    *after* `ensure_session` already created the row -- a real gap found
+    while building the admin console's sessions list (§6.7 column
+    "browser and device"), which was always blank because nothing ever
+    called this. `COALESCE` so a later, device-less page_view (there is
+    only ever one real one, but idempotent retries exist) never
+    overwrites a value already captured."""
+    await pool.execute(
+        """
+        UPDATE sessions SET
+            browser = COALESCE($2, browser),
+            engine_version = COALESCE($3, engine_version),
+            device_pixel_ratio = COALESCE($4, device_pixel_ratio),
+            viewport_width = COALESCE($5, viewport_width),
+            viewport_height = COALESCE($6, viewport_height),
+            pointer_type = COALESCE($7, pointer_type)
+        WHERE session_id = $1
+        """,
+        session_id,
+        device.get("browser"),
+        device.get("engine_version"),
+        device.get("device_pixel_ratio"),
+        device.get("viewport_width"),
+        device.get("viewport_height"),
+        device.get("pointer_type"),
+    )
+
+
 async def insert_events(pool: asyncpg.Pool, envelopes: list[Envelope], r: redis.Redis | None = None) -> int:
     """Idempotent on event_id. Returns the number of *new* rows inserted
     (not the number of envelopes received — a retransmit legitimately

@@ -59,6 +59,25 @@ async def test_login_accepts_correct_password_and_sets_a_cookie():
         assert COOKIE_NAME in resp.cookies
 
 
+async def test_login_cookie_is_not_secure_outside_production():
+    """Real bug, found live: an unconditionally Secure cookie is
+    silently dropped by the browser over plain http://, which is exactly
+    how local dev serves this app -- login would 200 and then behave as
+    if it never happened."""
+    async with await _client() as client:
+        resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        set_cookie_header = resp.headers.get("set-cookie", "")
+        assert "Secure" not in set_cookie_header
+
+
+async def test_login_cookie_is_secure_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "app_env", "production")
+    async with await _client() as client:
+        resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        set_cookie_header = resp.headers.get("set-cookie", "")
+        assert "Secure" in set_cookie_header
+
+
 async def test_sessions_list_requires_authentication():
     async with await _client() as client:
         resp = await client.get("/api/admin/sessions")

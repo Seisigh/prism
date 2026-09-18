@@ -17,7 +17,13 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': { target: 'http://localhost:8090', changeOrigin: true },
+      // ws: true is required here too, not just below -- the admin
+      // console's live view WebSocket lives at /api/admin/live/{id},
+      // and without it Vite proxies the request as plain HTTP and the
+      // upgrade never happens: the socket sits in CONNECTING forever
+      // with no error, which is a real bug found live (Live view showed
+      // "Disconnected" for every session, always, with no exception).
+      '/api': { target: 'http://localhost:8090', changeOrigin: true, ws: true },
       '/media': { target: 'http://localhost:8090', changeOrigin: true },
       '/ws': { target: 'ws://localhost:8090', ws: true },
     },

@@ -1,0 +1,104 @@
+.layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: var(--sp-6);
+  align-items: start;
+}
+
+.signalList {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  background: var(--surface);
+}
+
+.signalItem {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--sp-2) var(--sp-3);
+  border: none;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface);
+  font-size: var(--fs-12);
+  font-family: ui-monospace, monospace;
+  cursor: pointer;
+  color: var(--slate);
+}
+
+.signalItem:last-child {
+  border-bottom: none;
+}
+
+.signalItem:hover {
+  background: var(--surface-alt);
+  color: var(--ink);
+}
+
+.signalItem.active {
+  background: var(--primary-tint);
+  color: var(--primary);
+  font-weight: 600;
+}
+
+.strataGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
+}
+
+.stratumCard {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  background: var(--surface);
+}
+
+.stratumHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: var(--sp-2);
+}
+
+.stratumTitle {
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+.availabilityRate {
+  font-size: var(--fs-12);
+  color: var(--slate);
+}
+
+.availabilityRate.low {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.histogram {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 64px;
+  margin-top: var(--sp-3);
+}
+
+.bar {
+  flex: 1;
+  background: var(--primary);
+  border-radius: 2px 2px 0 0;
+  min-height: 2px;
+}
+
+.noData {
+  color: var(--slate-soft);
+  font-size: var(--fs-12);
+  font-style: italic;
+}
+
+@media (max-width: 900px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+}

@@ -39,6 +39,12 @@
   align-items: start;
 }
 
+@media (max-width: 900px) {
+  .columns {
+    grid-template-columns: 1fr;
+  }
+}
+
 .panel {
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
@@ -91,7 +97,13 @@
   background: var(--surface-alt);
 }
 
-.payload {
+/* `td.payload`, not `.payload`: `.table td { white-space: nowrap }`
+   above has higher specificity (element + class) than a bare `.payload`
+   class (class only) and was winning outright, which is the real bug
+   that made payload JSON look truncated with no ellipsis instead of
+   wrapping -- it was never actually being cut off, just rendered as one
+   unbroken line past the visible column width. */
+td.payload {
   white-space: pre-wrap;
   max-width: 320px;
   color: var(--slate);
@@ -115,4 +127,20 @@
   padding: var(--sp-8);
   color: var(--slate-soft);
   text-align: center;
+}
+
+/* border-left rather than box-shadow: box-shadow on a cell inside a
+   border-collapse:collapse table renders inconsistently (real defect
+   found live -- box-shadow was completely invisible despite the class
+   and inline custom property both being applied correctly, confirmed
+   by injecting a literal text marker before concluding it was a CSS
+   rendering issue rather than the lookup logic). A transparent 4px
+   border reserved on every row (not just overlaid ones) keeps column
+   widths identical regardless of overlay state -- only the color changes. */
+.table td:first-child {
+  border-left: 4px solid transparent;
+}
+
+.overlaid td:first-child {
+  border-left-color: var(--overlay-color, var(--primary));
 }

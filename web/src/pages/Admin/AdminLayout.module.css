@@ -1,0 +1,177 @@
+.shell {
+  min-height: 100vh;
+  background: var(--surface-alt);
+}
+
+.topbar {
+  height: 56px;
+  background: var(--ink);
+  color: var(--surface);
+  display: flex;
+  align-items: center;
+  padding: 0 var(--sp-6);
+  gap: var(--sp-6);
+  position: sticky;
+  top: 0;
+  z-index: var(--z-header);
+}
+
+.brand {
+  font-weight: 700;
+  font-size: var(--fs-14);
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}
+
+.nav {
+  display: flex;
+  gap: var(--sp-1);
+  flex: 1;
+}
+
+.navLink {
+  color: rgba(255, 255, 255, 0.68);
+  text-decoration: none;
+  font-size: var(--fs-14);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+}
+
+.navLink:hover {
+  color: var(--surface);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.navLink.active {
+  color: var(--surface);
+  background: rgba(255, 255, 255, 0.14);
+  font-weight: 600;
+}
+
+.actions {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.newProfileBtn {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--surface);
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.newProfileBtn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.logoutBtn {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.68);
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.logoutBtn:hover {
+  color: var(--surface);
+}
+
+.content {
+  min-height: calc(100vh - 56px);
+}
+
+.loginWrap {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background: var(--ink);
+}
+
+.loginCard {
+  width: min(360px, calc(100vw - 32px));
+  background: var(--surface);
+  border-radius: var(--radius-md);
+  padding: var(--sp-8) var(--sp-6);
+  box-shadow: var(--shadow-2);
+}
+
+.loginTitle {
+  font-size: var(--fs-20);
+  margin-bottom: var(--sp-1);
+}
+
+.loginSub {
+  color: var(--slate);
+  font-size: var(--fs-14);
+  margin-bottom: var(--sp-6);
+}
+
+.loginInput {
+  width: 100%;
+  height: 40px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 0 var(--sp-3);
+  font-size: var(--fs-14);
+  margin-bottom: var(--sp-3);
+}
+
+.loginInput:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.loginBtn {
+  width: 100%;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--primary);
+  color: var(--surface);
+  font-size: var(--fs-14);
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.loginBtn:hover {
+  background: var(--primary-hover);
+}
+
+.loginBtn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.loginError {
+  color: var(--danger);
+  font-size: var(--fs-12);
+  margin-bottom: var(--sp-3);
+}
+
+@media (max-width: 900px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: var(--sp-3) var(--sp-4);
+  }
+  .nav {
+    /* `.nav` above is `flex: 1` (flex-basis: 0%), which wins over a
+       plain `width: 100%` for main-axis sizing in a flex row -- that
+       made this rule a no-op and left nav squeezed onto the same line
+       as brand+actions, after them, instead of wrapping to its own row
+       as intended. `flex-basis: 100%` (via the shorthand) forces the
+       wrap. */
+    order: 3;
+    flex: 1 1 100%;
+    overflow-x: auto;
+    padding-bottom: var(--sp-1);
+  }
+}

@@ -1,0 +1,109 @@
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 320px;
+  gap: var(--sp-6);
+  align-items: start;
+}
+
+.controls {
+  display: flex;
+  gap: var(--sp-2);
+  align-items: center;
+}
+
+.controlBtn {
+  height: 32px;
+  padding: 0 var(--sp-3);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: var(--fs-12);
+  cursor: pointer;
+}
+
+.controlBtn:hover {
+  background: var(--surface-alt);
+}
+
+.controlBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.controlBtn.frozen {
+  background: var(--warning-tint);
+  border-color: var(--warning-ink);
+  color: var(--warning-ink);
+}
+
+.queueBadge {
+  font-size: var(--fs-12);
+  color: var(--slate);
+}
+
+.stream {
+  max-height: 70vh;
+  overflow-y: auto;
+}
+
+/* Same fix as the Event log viewer, including the same specificity
+   trap: `.table td { white-space: nowrap }` (element + class) beats a
+   bare `.payload` class (class only), so this must be `td.payload`
+   (element + class, tied on specificity, wins on source order) to
+   actually override it. Without this, payload JSON is silently cut
+   off with no visible indication of truncation. */
+td.payload {
+  white-space: pre-wrap;
+  max-width: 320px;
+}
+
+.vectorPanel {
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  background: var(--surface);
+}
+
+.vectorTitle {
+  font-weight: 600;
+  font-size: var(--fs-14);
+  margin-bottom: var(--sp-3);
+}
+
+.dimension {
+  margin-bottom: var(--sp-3);
+}
+
+.dimensionLabel {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--slate);
+  margin-bottom: 4px;
+  font-family: ui-monospace, monospace;
+}
+
+.dimensionTrack {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--surface-sunken);
+  overflow: hidden;
+}
+
+.dimensionFill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--primary);
+}
+
+.statusDot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-right: 6px;
+}
+
+.statusConnected { background: var(--savings); }
+.statusDisconnected { background: var(--danger); }
