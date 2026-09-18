@@ -3,9 +3,9 @@ import { SessionModeTracker } from './mode'
 import { PointerTracker } from './pointerTracker'
 import { ScrollTracker } from './scrollTracker'
 import { Transport } from './transport'
-import type { DeviceInfo, Envelope, EventType, Mode, Surface } from './types'
+import type { DeviceInfo, Envelope, EventType, Mode, ProfileUpdate, Surface } from './types'
 
-export type { Envelope, EventType, Mode, Surface, DeviceInfo } from './types'
+export type { Envelope, EventType, Mode, Surface, DeviceInfo, ProfileUpdate } from './types'
 export { SessionModeTracker } from './mode'
 
 export interface PrismConfig {
@@ -54,6 +54,7 @@ export class PrismSDK {
   private hoverStarts = new Map<Element, string>()
   private config: PrismConfig
   private trackedImpressions = new Set<string>()
+  private profileUpdateListeners = new Set<(update: ProfileUpdate) => void>()
 
   constructor(config: PrismConfig) {
     this.config = config
@@ -98,7 +99,14 @@ export class PrismSDK {
   }
 
   init(): void {
-    this.transport.connect()
+    this.transport.connect({
+      onMessage: (data) => {
+        const message = data as { type?: string }
+        if (message?.type === 'profile_update') {
+          this.profileUpdateListeners.forEach((listener) => listener(data as ProfileUpdate))
+        }
+      },
+    })
     this.pointerTracker.start()
     this.scrollTracker.start()
     document.addEventListener('visibilitychange', this.handleVisibilityChange)
@@ -209,6 +217,13 @@ export class PrismSDK {
 
   trackCategoryNavClick(): void {
     this.modeTracker.recordCategoryNavClick(this.now())
+  }
+
+  /** Registers a listener for live profile-update pushes (§12). Returns
+   * an unsubscribe function so React effects can clean up on unmount. */
+  onProfileUpdate(listener: (update: ProfileUpdate) => void): () => void {
+    this.profileUpdateListeners.add(listener)
+    return () => this.profileUpdateListeners.delete(listener)
   }
 
   destroy(): void {

@@ -23,7 +23,7 @@ docs/reference/
 !.env.example
 
 # Model artifacts and training dumps
-models/artifacts/
+server/models/artifacts/
 data/parquet/
 *.pkl
 *.joblib

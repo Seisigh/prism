@@ -15,6 +15,7 @@ from server.catalog_store import get_store
 from server.features.replay import recompute_session
 from server.ingest.db import get_pg_pool, get_redis
 from server.ingest.envelope import Envelope
+from server.ingest.live_scoring import score_session_update
 from server.ingest.store import (
     delete_sessions_by_code,
     ensure_session,
@@ -39,6 +40,22 @@ def _parse_batch(raw: list[dict]) -> list[Envelope]:
     return envelopes
 
 
+async def _maybe_push_profile_update(websocket: WebSocket, pool, r, session_id: UUID) -> None:
+    """§12's live scoring path: view closes -> real features -> ranker
+    score -> calibration -> taste-vector update -> pushed WebSocket
+    message, all on the semantic trigger of an event batch that closed a
+    view. Wrapped per §7.4 ("telemetry never breaks the UI"): a scoring
+    failure is logged and swallowed, never allowed to drop the
+    connection or block ingest of the next batch."""
+    try:
+        events = await get_session_events(pool, session_id)
+        update = await score_session_update(r, session_id, events)
+        if update is not None:
+            await websocket.send_json(update)
+    except Exception:
+        logger.exception("live scoring failed for session %s; continuing without a push", session_id)
+
+
 @router.websocket("/ws")
 async def telemetry_ws(websocket: WebSocket, session_id: UUID = Query(...), code: str = Query(...)):
     # `code` is the visitor-facing string generated client-side (§1 of
@@ -59,6 +76,7 @@ async def telemetry_ws(websocket: WebSocket, session_id: UUID = Query(...), code
             envelopes = _parse_batch(batch)
             if envelopes:
                 await insert_events(pool, envelopes, r)
+                await _maybe_push_profile_update(websocket, pool, r, session_id)
     except WebSocketDisconnect:
         pass
     except Exception:

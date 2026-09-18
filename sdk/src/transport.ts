@@ -23,15 +23,17 @@ export class Transport {
   private destroyed = false
   private onDisconnect: (() => void) | null = null
   private onReconnect: (() => void) | null = null
+  private onMessage: ((data: unknown) => void) | null = null
   private config: TransportConfig
 
   constructor(config: TransportConfig) {
     this.config = config
   }
 
-  connect(callbacks?: { onDisconnect?: () => void; onReconnect?: () => void }): void {
+  connect(callbacks?: { onDisconnect?: () => void; onReconnect?: () => void; onMessage?: (data: unknown) => void }): void {
     this.onDisconnect = callbacks?.onDisconnect ?? null
     this.onReconnect = callbacks?.onReconnect ?? null
+    this.onMessage = callbacks?.onMessage ?? null
     this.openSocket()
     this.flushTimer = setInterval(() => this.flush(), FLUSH_INTERVAL_MS)
     window.addEventListener('pagehide', this.flushViaBeacon)
@@ -54,6 +56,15 @@ export class Transport {
       })
       ws.addEventListener('error', () => {
         // 'close' fires right after; reconnect is scheduled there.
+      })
+      ws.addEventListener('message', (event) => {
+        // §7.4: telemetry never breaks the UI — a malformed push is
+        // dropped silently, never thrown into the caller's render path.
+        try {
+          this.onMessage?.(JSON.parse(event.data))
+        } catch {
+          // ignore
+        }
       })
       this.ws = ws
     } catch {

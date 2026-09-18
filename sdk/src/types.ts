@@ -72,6 +72,21 @@ export interface RecImpressionPayload {
   propensities: number[]
 }
 
+/** Pushed by server/ingest/live_scoring.py on a view-close trigger
+ * (BUILD_BRIEF.md §12) — the only message shape the server ever sends
+ * back over the telemetry WebSocket. `vector`/`dimensions` are aligned
+ * by index (sim/embedding.py's DIMENSIONS order); `last_p_i` is the
+ * calibrated interest for the view that triggered this update, `null`
+ * when that view was a fast skip scored by weight alone. */
+export interface ProfileUpdate {
+  type: 'profile_update'
+  scored_view_count: number
+  vector: number[]
+  dimensions: string[]
+  last_item_id: string | null
+  last_p_i: number | null
+}
+
 export interface DeviceInfo {
   browser: string
   engine_version: string
