@@ -1489,20 +1489,162 @@ higher-priority gap and is what this section closes.
 
 ---
 
+## Admin console (§6.7) — built and screenshot-reviewed
+
+All five views built: Sessions list, Session detail (per-view signal
+breakdown, raw/z-score/availability per signal, honoring "unavailable —
+not imputed as zero" as visible UI copy, not just an internal rule),
+Event log (raw events + offline-recomputed canonical views/modes side
+by side, with a colored overlay marking which raw events fall inside
+which recomputed view — the Gate 0 manual-check tool), Signal
+distributions (per-signal, per-mode, per-surface histograms + real
+availability rate), Live view (WebSocket-fed event stream + ranked
+taste vector, Freeze/Step controls). One shared design language
+(`admin-shared.module.css`) across all five rather than five
+independently-styled pages.
+
+The §6.6 screenshot review loop was run in full on this surface too,
+per instruction ("applies to every admin console surface exactly as it
+does to the storefront... the screen technical readers will spend the
+most time on"): two passes minimum, both viewports (1440px and 768px),
+real screenshots via the browser, real named defects. Screenshots in
+`docs/screens/admin-*-{1440,768}.jpg`. This surfaced real, verified
+bugs, not style nitpicks:
+
+- **Live view's WebSocket never connected in local dev.** Every session
+  showed "Disconnected," always — traced to `web/vite.config.ts`'s dev
+  proxy, which had `ws: true` only on the `/ws` rule, not `/api`. Since
+  the admin live socket lives at `/api/admin/live/{id}`, Vite proxied
+  the upgrade request as plain HTTP and it sat in `CONNECTING` forever
+  with no error on either side. This is not a cosmetic bug — it's the
+  entire reason the view's core feature looked broken. Fixed
+  (`ws: true` added to the `/api` proxy rule too) and verified against
+  a real, concurrently-browsing storefront session: event stream and
+  ranked taste vector both updated live, Freeze/Step confirmed to hold
+  and drain the update queue correctly.
+- **`.panel { overflow: hidden }` silently clipped wide tables at
+  768px, with no scrollbar** — three Sessions-list columns, including
+  the only link to Live view, were completely unreachable, not just
+  visually truncated. Fixed with a new `.tableScroll` wrapper div
+  scoping `overflow-x: auto` to the table itself (not the `<table>`
+  element's own `display`, which was tried first and reverted: it
+  broke `colSpan` rows in Session detail's expand panel by decoupling
+  header/body column widths — caught via a regression screenshot,
+  fixed properly before moving on).
+- **`className="clickable"` was a raw string** on Sessions-list and
+  Session-detail rows, not the CSS-modules-hashed `.clickable` class
+  the `cursor: pointer` rule actually targets — verified via
+  `getComputedStyle` that the cursor never changed. Fixed, and while
+  in there: Sessions-list rows had no `onClick` at all despite the
+  clickable styling intent (added real row-click-to-navigate, with
+  `stopPropagation` on the nested Code/Live links), and neither row
+  type had keyboard support (added `tabIndex`/`role="button"`/
+  `onKeyDown`).
+- **AdminLayout's mobile nav never actually wrapped to its own row** —
+  `order: 3; width: 100%` was meant to push it below the brand/actions
+  row at ≤900px, but the base rule's `flex: 1` sets `flex-basis: 0%`,
+  which wins over `width` for main-axis sizing, making the `width:
+  100%` a silent no-op. Nav rendered squeezed onto the same row,
+  after the actions — disorienting, not just ugly. Fixed via
+  `flex: 1 1 100%` instead.
+- **Event log's two-column layout had no responsive breakpoint** —
+  both panels squeezed to ~350px at 768px, payload and mode/closed_by
+  columns unreadable. Added a stacking breakpoint.
+- **Payload columns (Event log, Live view) silently truncated with no
+  visible indication** — `.payload`'s `white-space: pre-wrap` lost to
+  `.table td`'s `white-space: nowrap` on CSS specificity (element+class
+  beats class alone), so long JSON just ran off the edge looking like
+  it was cut off. Fixed via `td.payload` (same specificity family,
+  wins on source order) in both places.
+- **Event log's view-boundary overlay was invisible** — `box-shadow`
+  renders unreliably on cells inside a `border-collapse` table (found
+  by injecting a literal text marker to prove the lookup logic was
+  already correct before suspecting CSS). Switched to a reserved
+  `border-left`. Discovery-mode's overlay color was also too
+  low-contrast to see even after that fix; changed to a stronger
+  token.
+- **Signal distributions fetched `bin_edges` but never showed them** —
+  hovering a bar only gave a raw count, which undercuts the panel's
+  own stated purpose ("this is how a degenerate normalizer... gets
+  noticed") — a reader can't tell *which* values are missing or
+  clustered without the range. Tooltip now shows both.
+- Event log's page header used bespoke standalone styles instead of
+  the shared admin conventions the other four views use; brought in
+  line (also renamed to "Event log" to match its own nav link, which
+  it previously didn't).
+
+234 backend tests pass, `tsc --noEmit` clean, `oxlint` has no new
+errors (existing pattern warnings only, consistent with the rest of the
+codebase). Committed and pushed.
+
+**Load test (`eval/load_test.py`):** run locally against the dev stack,
+not against a deployed URL — see the Deployment note below on why
+deployment itself is deferred. A local run measures the application's
+own p95 trigger→pushed-update latency against the §12 budget, which is
+what that budget is actually about; it does not measure network
+latency to a hosted region, which a deployed run would conflate in.
+Opens N concurrent real WebSocket connections to `/ws`, each sending
+`view_start`+`view_end` batches for real catalog items — each such
+batch is itself a genuine "view closed" trigger, so every measured
+round trip is a real semantic trigger, never an untriggered flush.
+
+**Building this load test found a real, previously-undiscovered
+correctness bug, not a performance problem — the load test's actual
+job.** The first run showed some triggers per session simply never
+getting a pushed update at all (not slow — silently missing). Traced
+to `server/ingest/live_scoring.py`'s `score_session_update`: it decides
+"has anything new closed since last time" via `item_views[-1].end`, but
+`item_view.py`'s `compute_item_views` returns views sorted by
+`(item_id, start)` — grouped for the admin console's event-log viewer —
+not chronologically. Whenever the most-recently-closed view's item_id
+doesn't happen to sort last alphabetically (the common case with random
+catalog IDs), `item_views[-1]` pointed at an already-scored view instead
+of the new one, and the entire update was silently dropped: no
+exception, no push, and the visitor's own browser would just never see
+their profile update for that view. Fixed by sorting `item_views` by
+`(end, start)` before any of the "what's new" logic in
+`score_session_update` — a one-line, narrowly-scoped fix, deliberately
+not touching `compute_item_views`'s own sort order, which other
+consumers (the admin console's Event log viewer) genuinely want
+grouped by item. Regression test added:
+`tests/ingest/test_score_session_update_does_not_drop_a_view_whose_item_id_sorts_earlier`,
+reproducing the exact ordering that hid it (an item closing second
+chronologically but sorting first alphabetically). All 235 tests pass.
+
+**Results, live server, after the fix** (20 concurrent sessions × 5
+triggers, then 40 × 8 as a heavier check; each trigger a real
+`view_start`+`view_end` WebSocket round trip):
+
+| run | triggers | dropped | p50 | p90 | p95 | p99 | max |
+|---|---|---|---|---|---|---|---|
+| 20×5 | 100 | 0 | 39.9ms | 68.9ms | 73.4ms | 79.1ms | 81.1ms |
+| 40×8 | 320 | 0 | 78.5ms | 119.5ms | 138.4ms | 161.1ms | 193.9ms |
+
+**§12 budget (p95 < 250ms): PASS on both runs**, with headroom (p95 at
+~30-55% of budget even at 40 concurrent sessions on ordinary dev
+hardware, not production infrastructure). Zero dropped/missing triggers
+in either run, confirming the ordering fix above holds under
+concurrency, not just in the single-session case that first caught it.
+
+---
+
 ## Deployment
 
-**Prepared and locally verified twice over; blocked on Fly.io billing,
-not on flyctl auth anymore.** `flyctl` is now authenticated as the
-author's own account (`alvinw.seisigh@gmail.com`) — that blocker from
-earlier in the build is resolved. `flyctl apps create prism-storefront`
-was attempted and failed with: *"We need your payment information to
-continue! Add a credit card or buy credit:
-https://fly.io/dashboard/seisigh/billing"* — Fly.io requires billing
-information on the account before it will create *any* app, even one
-that fits entirely within free-tier-eligible resource sizes. Entering
-payment details is explicitly the author's own action, not the agent's,
-per the standing rule against handling financial credentials — flagged
-here rather than attempted.
+**Prepared and locally verified twice over. Deferred pending a hosting
+decision — not blocked on a bug.** `flyctl` is authenticated as the
+author's own account (`alvinw.seisigh@gmail.com`); that auth blocker
+from earlier in the build is resolved. `flyctl apps create
+prism-storefront` was retried this session and still fails with: *"We
+need your payment information to continue! Add a credit card or buy
+credit: https://fly.io/dashboard/seisigh/billing"* — Fly.io requires
+billing information on the account before it will create *any* app,
+even one that fits entirely within free-tier-eligible resource sizes.
+Entering payment details is explicitly the author's own action, not the
+agent's, per the standing rule against handling financial credentials.
+Given the choice to add a card now or defer, the author chose to defer
+and keep building — this is a hosting decision still open, not a
+blocker the agent hit and stopped on. Everything below is ready to run
+the moment that decision is made.
 
 - `Dockerfile` — multi-stage: builds `sdk/` + `web/` (Node), then a Python stage that installs the backend, bakes the real catalog in at image-build time (`RUN python -m catalog.build` — needs network access during `docker build`), **now also bakes the trained per-mode ranker + calibrator artifacts in the same way** (`RUN python -m server.models.train_ranker`, ~50s in-container — needs the catalog built first, since `sim/embedding.py` reads it), and serves both the API and the built frontend from one `uvicorn` process. Needed `libgomp1` added to the apt-get line — LightGBM's shared library requires the OpenMP runtime, which the slim base image doesn't include by default; the build failed with `OSError: libgomp.so.1: cannot open shared object file` before this was added, a real, now-fixed bug in this build's own Dockerfile change, not a pre-existing issue.
 - **Verified locally, this session**: built the image from a clean cache (confirming both the new `libgomp1` fix and the ranker-training step complete successfully — 748/750 context items resolved, 2 dropped to a transient ABO S3 SSL error, within the pipeline's already-tolerated drop-rate), ran the container against the existing docker-compose Postgres/Redis, confirmed `/api/health` returns 200 immediately on a cold container start (meaning the baked-in ranker artifacts load correctly at process startup, not just at build time).

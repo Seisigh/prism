@@ -92,7 +92,19 @@ async def score_session_update(r: redis.Redis, session_id: UUID, event_rows: lis
     for item in store.all_items:
         brand_tokens.update(item["brand"].lower().replace("&", " ").split())
 
-    item_views = recompute_session(event_rows, near_substitute_set_by_item, brand_tokens)
+    # recompute_session (item_view.py's compute_item_views) returns views
+    # sorted by (item_id, start) -- grouped for the admin console's event
+    # log viewer, not chronological. Real, previously-undiscovered bug
+    # caught by eval/load_test.py: with that ordering, `item_views[-1]`
+    # is whichever item sorts alphabetically last, not whichever view
+    # closed most recently, so a genuinely-new closed view could be
+    # silently skipped whenever its item_id doesn't happen to sort last.
+    # Re-sorting chronologically here is required before any of the
+    # "what's new since last call" logic below.
+    item_views = sorted(
+        recompute_session(event_rows, near_substitute_set_by_item, brand_tokens),
+        key=lambda v: (v.end, v.start),
+    )
     if not item_views:
         return None
 

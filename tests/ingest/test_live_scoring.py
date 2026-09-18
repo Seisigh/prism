@@ -47,11 +47,19 @@ def _session_events(item_id: str, view_start: float, view_end: float) -> list[di
 def _stub_catalog_and_embeddings(monkeypatch):
     fake_store = SimpleNamespace(
         core_items=[],
-        all_items=[{"item_id": "i1", "brand": "Acme Co."}],
-        by_id={"i1": {"category": "Test Category"}},
+        all_items=[{"item_id": "i1", "brand": "Acme Co."}, {"item_id": "z1", "brand": "Acme Co."}, {"item_id": "a1", "brand": "Acme Co."}],
+        by_id={
+            "i1": {"category": "Test Category"},
+            "z1": {"category": "Test Category"},
+            "a1": {"category": "Test Category"},
+        },
     )
     monkeypatch.setattr(live_scoring, "get_store", lambda: fake_store)
-    fake_vectors = {"i1": SimpleNamespace(vector=(0.1, 0.2, 0.3, 0.0, 0.5, 0.1, 0.0), category="Test Category", near_substitute_set_id=None)}
+    fake_vectors = {
+        "i1": SimpleNamespace(vector=(0.1, 0.2, 0.3, 0.0, 0.5, 0.1, 0.0), category="Test Category", near_substitute_set_id=None),
+        "z1": SimpleNamespace(vector=(0.1, 0.2, 0.3, 0.0, 0.5, 0.1, 0.0), category="Test Category", near_substitute_set_id=None),
+        "a1": SimpleNamespace(vector=(0.4, 0.1, 0.2, 0.0, 0.1, 0.1, 0.0), category="Test Category", near_substitute_set_id=None),
+    }
     monkeypatch.setattr(live_scoring, "_item_vectors", lambda: fake_vectors)
     monkeypatch.setattr(live_scoring, "_catalog_centroid", lambda: (0.1, 0.2, 0.3, 0.0, 0.5, 0.1, 0.0))
     monkeypatch.setattr(live_scoring.ranker_store, "is_trained", lambda: True)
@@ -95,3 +103,29 @@ async def test_score_session_update_ignores_a_view_already_scored():
     assert first is not None
     second = await live_scoring.score_session_update(r, session_id, events)
     assert second is None
+
+
+async def test_score_session_update_does_not_drop_a_view_whose_item_id_sorts_earlier():
+    """recompute_session (item_view.py's compute_item_views) returns views
+    sorted by (item_id, start) for the admin console's grouped display,
+    not chronologically. A second view that closes later but whose
+    item_id sorts alphabetically *before* an already-scored item must
+    still be picked up -- caught live by eval/load_test.py, where a
+    session's second trigger was silently dropped whenever the newer
+    item's id happened to sort earlier than the first item's id."""
+    r = await _redis_or_skip()
+    session_id = uuid4()
+
+    # "z1" closes first chronologically; "a1" closes second but sorts
+    # alphabetically before "z1" -- exactly the ordering that hid the bug.
+    first_events = _session_events("z1", 1000.0, 3000.0)
+    first = await live_scoring.score_session_update(r, session_id, first_events)
+    assert first is not None
+    assert first["scored_view_count"] == 1
+    assert first["last_item_id"] == "z1"
+
+    all_events = first_events + _session_events("a1", 4000.0, 6000.0)
+    second = await live_scoring.score_session_update(r, session_id, all_events)
+    assert second is not None, "the later-closing view was silently dropped"
+    assert second["scored_view_count"] == 2
+    assert second["last_item_id"] == "a1"
