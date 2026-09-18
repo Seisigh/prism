@@ -29,11 +29,34 @@ Reasoning per family:
 - **comparison**: behavior that indicates weighing this item against
   alternatives -- revisits of this same item, and how many other
   near-substitute-set items were viewed nearby in time.
+- **directional** (`server/features/signals_directional.py`, added after
+  Gate 1's ranker recovery stalled -- see STATE.md's "Eighteen signals
+  that measure magnitude, none that measure direction" section): the
+  only family whose constituents can distinguish *which way* a
+  trajectory leaned, not just how confidently or how erratically it
+  moved. Deliberately its own family rather than folded into
+  motor_conflict: averaging a directional signal into a family of
+  magnitude-only signals would launder away the exact distinction this
+  family exists to keep visible, and a future ablation over families
+  needs to be able to attribute recovery to direction specifically
+  rather than to "motor behavior" generally.
 - **availability**: not a behavioral signal at all -- the fraction of
-  the other four families' constituent raw signals that were actually
+  the other five families' constituent raw signals that were actually
   computable (non-None) for this view. A structural meta-signal per
   §9.2's "carry availability as its own indicator," not a stand-in value
   for missing data.
+
+**Guard, stated explicitly because it is the exact place direction died
+the first time:** nothing in this module may take `abs()` or any other
+magnitude of `early_direction_bias` or `direction_stabilization_fraction`
+before averaging it into the `directional` composite. A signed signal
+averaged together with unsigned ones is fine (that's what happens below);
+discarding the sign is not.
+`tests/features/test_composites.py::test_composites_module_never_takes_an_absolute_value`
+enforces this on the module's own source, the same way
+`tests/sim/test_session.py::test_session_never_assigns_mode_directly`
+enforces its own rule by inspecting source rather than trusting a
+docstring.
 
 Composite values are the mean of their *z-scored* constituent signals
 (z-scored within (session, mode, surface) via normalize.z_score) that
@@ -44,7 +67,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-FAMILIES = ["attention", "motor_conflict", "exploration", "comparison", "availability"]
+FAMILIES = ["attention", "motor_conflict", "exploration", "comparison", "directional", "availability"]
 
 # name -> (family, sign). Sign -1 means "subtract this signal's z-score"
 # rather than add it -- used only for query_specificity's inverse
@@ -65,6 +88,8 @@ SIGNAL_FAMILY_MAP: dict[str, tuple[str, float]] = {
     "query_specificity": ("exploration", -1.0),
     "revisit_count": ("comparison", 1.0),
     "near_substitute_coview_count": ("comparison", 1.0),
+    "early_direction_bias": ("directional", 1.0),
+    "direction_stabilization_fraction": ("directional", 1.0),
 }
 
 # Signals with no family (fed to the ranker raw, or consumed elsewhere):

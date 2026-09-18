@@ -41,6 +41,13 @@ class ItemContext:
     prior_view_categories: tuple[str, ...] = ()
     active_query_token_count: int | None = None
     near_substitute_coview_count: int | None = None
+    # server/features/signals_directional.py's coordinates: the two real
+    # on-screen destinations the reach was blended between (see
+    # sim/generative.py / sim/session.py). Both None on a surface with no
+    # meaningful reject location -- the caller's job to leave unset
+    # rather than synthesize a position, per that module's docstring.
+    accept_pos: tuple[float, float] | None = None
+    reject_pos: tuple[float, float] | None = None
 
 
 def _pointer_samples(events: list[RawEvent], window: WindowSpec) -> list[tuple[float, float, float]]:

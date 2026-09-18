@@ -28,12 +28,14 @@ def test_extract_produces_one_row_per_view():
     assert len(rows) == len(session.views)
 
 
-def test_every_row_carries_the_five_families():
+def test_every_row_carries_all_families_including_directional():
     rng = random.Random(2)
     session = simulate_session("s2", ARCHETYPES["skimmer"], _kitchen_items(), 15, rng)
     rows = extract_session_features(session, ITEM_VECTORS)
     for row in rows:
-        assert set(row.composites.keys()) == {"attention", "motor_conflict", "exploration", "comparison", "availability"}
+        assert set(row.composites.keys()) == {
+            "attention", "motor_conflict", "exploration", "comparison", "directional", "availability",
+        }
         assert set(row.availability.keys()) == set(row.composites.keys())
 
 

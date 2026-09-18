@@ -133,7 +133,15 @@ the offline-recomputed canonical views and modes side by side.
 > not independent of it, per the mouse-tracking literature (Leontyev &
 > Yamauchi 2021, §16) — that assumption is what makes recovering interest
 > from behavior possible at all. It is an assumption the simulator is
-> built on, not a finding this project has demonstrated.
+> built on, not a finding this project has demonstrated. Two directional
+> motor signals were added only after diagnosing that the original
+> eighteen-signal set — despite the coupling above making direction
+> mechanistically real in the simulated data — measured only the
+> magnitude and shape of behavior (how long, how fast, how curved) and
+> nothing about *which* of two on-screen destinations a trajectory leaned
+> toward; see STATE.md for the finding in full, including that the two
+> new signals individually correlate with the outcome far more than
+> anything else measured so far.
 >
 > **Fabricated content.** Product images derive from Amazon Berkeley
 > Objects under CC BY-NC 4.0 and some show manufacturer logos on

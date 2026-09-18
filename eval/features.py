@@ -31,12 +31,13 @@ from server.features.labels import is_fast_skip
 from server.features.mode import COMPARISON_WINDOW_MS, QuerySubmission, is_query_active
 from server.features.normalize import z_score
 from server.features.signals import SIGNAL_REGISTRY, ItemContext
+from server.features.signals_directional import DIRECTIONAL_SIGNAL_REGISTRY
 from server.features.signals_gate1 import GATE1_SIGNAL_REGISTRY
 from server.features.window_spec import seal_window_for_view
 from sim.embedding import ItemVector
 from sim.session import SimulatedSession
 
-ALL_SIGNALS = {**SIGNAL_REGISTRY, **GATE1_SIGNAL_REGISTRY}
+ALL_SIGNALS = {**SIGNAL_REGISTRY, **GATE1_SIGNAL_REGISTRY, **DIRECTIONAL_SIGNAL_REGISTRY}
 
 
 @dataclass(frozen=True)
@@ -95,6 +96,13 @@ def extract_session_features(
             prior_view_categories=tuple(item_vectors[v.item_id].category for v in earlier),
             active_query_token_count=_active_query_token_count(session, view.start),
             near_substitute_coview_count=near_substitute_coview_count,
+            # The simulator only ever generates the grid ("category")
+            # surface today, where a next-item reject location always
+            # exists -- see sim/session.py's SimulatedView.reject_pos.
+            # A future detail-page simulation with no meaningful reject
+            # location would leave these None rather than synthesize one.
+            accept_pos=view.accept_pos,
+            reject_pos=view.reject_pos,
         )
         window = seal_window_for_view(view.start, view.end, view.item_id, session.commitment_events)
 

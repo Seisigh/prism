@@ -80,6 +80,13 @@ class SimulatedView:
     committed: bool
     start: float
     end: float
+    # The two on-screen destinations the reach was blended between (see
+    # generative.py) -- persisted here rather than recomputed downstream,
+    # since a revisit reuses its item's *original* grid position and
+    # re-deriving that in the feature layer would duplicate this
+    # module's own browse-order bookkeeping.
+    accept_pos: tuple[float, float] = (0.0, 0.0)
+    reject_pos: tuple[float, float] = (0.0, 0.0)
 
 
 @dataclass
@@ -187,6 +194,7 @@ def simulate_session(
                 SimulatedView(
                     item_id=item.item_id, utility=u, mode=mode, dwell_ms=result.dwell_ms,
                     committed=result.committed_positive, start=view_start_t, end=view_end_t,
+                    accept_pos=accept_pos, reject_pos=reject_pos,
                 )
             )
             prior_views.append(PriorView(item_id=item.item_id, start=view_start_t, near_substitute_set_id=item.near_substitute_set_id))

@@ -629,6 +629,117 @@ decision, not implemented.
 itself (`eval/ranker.py`), which was not modified in this pass — the
 finding above is upstream of it.
 
+### Finding: eighteen signals that measure magnitude, none that measured direction — and the two that now do
+
+This is a result, not a footnote — recorded as one per the author's
+explicit instruction. Every signal registered before this point
+(`server/features/signals.py`'s eight, `signals_gate1.py`'s six, sixteen
+of the sixteen total counting `near_substitute_coview_count`) measures
+the *magnitude or shape* of behavior: how long, how fast, how curved, how
+many reversals, how many pauses, how many categories, how specific a
+query. Not one of them measures *which* of two real destinations a
+trajectory leaned toward. This was true even after `sim/generative.py`
+was fixed to genuinely couple motor output to the DDM's evidence path
+(previous section) — a real, direction-dependent trace exists in the
+event log, and the composite-vs-`committed` correlations stayed at ~0
+anyway, because the feature layer had no eyes for direction, only for
+effort and hesitation. Eighteen signals that all answer "how" and none
+that answer "which way" cannot recover preference direction even when
+direction is demonstrably present in the underlying data — that gap is
+the actual finding; the low rho was only its symptom.
+
+**Two signals added to close it** (`server/features/signals_directional.py`,
+a new module rather than an addition to `signals_gate1.py`, and a new
+sixth composite family, `directional`, rather than folding into
+`motor_conflict` — kept separately visible per the author's instruction,
+not absorbed into an average that already contains twelve magnitude-only
+signals):
+
+- **`early_direction_bias`**: the scale-free ratio
+  `(d_reject - d_accept) / (d_accept + d_reject)` (bounded to [-1, 1],
+  positive leans accept), time-integrated over the **first third of the
+  view**, with the **final 1000ms before the window's own seal excluded
+  regardless** of where that first-third boundary falls — whichever
+  restriction produces the smaller window. This specifically avoids the
+  tautology a *final*-position feature would be: at the end of a view
+  that led to a cart add, the cursor is already on the item, so "cursor
+  near accept at the end" would just restate the label under a different
+  name, clearing the leakage test on a technicality while measuring
+  nothing. The literature's actual claim (Leontyev & Yamauchi 2021) is
+  that *partial, still-resolving* evidence biases motor output *before*
+  the decision is final — so this signal only looks at the early part of
+  the trajectory. Consequence, confirmed by a real caught edge case
+  (`test_early_direction_bias_none_for_short_views_with_no_valid_early_window`):
+  a fast, confident view can have a first-third boundary that falls
+  entirely inside the excluded final-1000ms zone, leaving **no valid
+  early window at all** — so this signal is least available for exactly
+  the short, decisive views it would otherwise be most useful for. That
+  is real, correctly-reported unavailability (§9.2), not a bug, but it
+  caps how much of the corpus this signal can ever cover.
+- **`direction_stabilization_fraction`**: the fraction of the view's own
+  duration elapsed before the direction ratio's sign locked in and never
+  changed again (scanning the whole pre-exclusion window, not just the
+  first third) — "how early did direction resolve," independent of which
+  way. A diagnostic-only third function,
+  `_full_trajectory_direction_bias_DIAGNOSTIC_ONLY`, computes the
+  tautological full-window version for contrast and is deliberately not
+  registered anywhere a model could reach it
+  (`test_diagnostic_only_function_is_not_in_the_real_registry`).
+- Neither takes `reject_pos`/`accept_pos` as a synthesized value: both
+  come from `SimulatedView.accept_pos`/`.reject_pos` (the item's own
+  card / the next item's card, for the only surface the simulator
+  currently generates), and the signal returns `None` rather than guess
+  when either is absent — matching the author's instruction to let a
+  surface with no meaningful reject location (e.g. a future detail-page
+  simulation) report unavailability rather than a synthesized position.
+- Sign-preservation guard: `test_directional_signal_sign_survives_into_the_composite`
+  confirms a positive `early_direction_bias` produces a positive
+  `directional` composite and a negative one produces negative;
+  `test_composites_module_never_takes_an_absolute_value` statically
+  greps `compute_composites`/`availability_composite`'s own source for
+  `abs(`/`fabs(` and fails the build if either appears — the exact
+  operation that discarded direction the first time, enforced
+  mechanically rather than by convention, the same move used for mode
+  assignment and the leakage rule.
+
+**Recovery rerun after adding both signals** (375/375 train/held-out
+sessions, same corpus recipe as before):
+
+```
+[1] Overall rho: 0.099 (need > 0.6)          [was 0.074 before this change]
+[2] Archetype accuracy: 0.299 (need > 0.7, chance 0.20)   [was 0.296]
+Negative control: rho = 0.064, accuracy = 0.320  (both correctly ~chance -- clean)
+```
+
+Both metrics moved only slightly. **A second, more specific finding
+surfaced while checking why:** the two raw directional signals
+*individually* correlate with `committed` far more than anything else in
+the feature set (`early_direction_bias` r=0.103, `direction_stabilization_fraction`
+r=-0.188 — an order of magnitude above every other raw signal's ~0.02–0.06),
+confirming the coupling fix genuinely put a strong, recoverable signal
+into the data. But the `directional` **composite**, which averages the
+two together with the same sign convention `query_specificity` uses
+elsewhere, comes out at r=-0.075 against `committed` — *weaker than
+either constituent alone, and opposite in sign to `early_direction_bias`* —
+because the two signals empirically point opposite ways relative to
+`committed` (one says "leans accept," the other says "how soon direction
+locked in," and in this corpus earlier lock-in correlates with the
+majority-positive outcome). Recombining them with
+`direction_stabilization_fraction`'s sign flipped (checked as a
+diagnostic only, not implemented) recovers r=+0.177 — close to double
+either raw signal alone. **Not changed in the code**, since flipping a
+family's internal sign convention because it improves a correlation
+number is exactly the kind of after-the-fact measurement-model
+adjustment the author has instructed against throughout this build; this
+is flagged for the author's decision, the same as the motor-model gap
+before it, not resolved unilaterally.
+
+The two new signals are visible as their own `directional` row separate
+from `motor_conflict` in every composite/availability report this file
+or `eval/gate1_dod.py` prints — the Gate-2 ablation harness (§12, not yet
+built) will inherit that separation automatically once it exists, rather
+than needing special-casing to avoid folding them back into an average.
+
 ---
 
 ## Gate 2 — noted, not started
