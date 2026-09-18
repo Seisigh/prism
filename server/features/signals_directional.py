@@ -31,10 +31,10 @@ reported unavailability (§9.2), not a bug -- see
 most often: the very fast, confident decisions this signal would
 otherwise be most useful for.
 
-`direction_stabilization_fraction` answers a different question ("how
-early did the direction lock in," not "which way did it lean") and
-scans the whole pre-exclusion window (not just the first third) for the
-last point at which the sign of the direction ratio changed -- deferring
+`direction_lock_in_speed` answers a different question ("how early did
+the direction lock in," not "which way did it lean") and scans the whole
+pre-exclusion window (not just the first third) for the last point at
+which the sign of the direction ratio changed -- deferring
 to whichever value the trajectory settled on before the final 1000ms,
 never after.
 
@@ -105,14 +105,32 @@ def early_direction_bias(events: list[RawEvent], window: WindowSpec, ctx: ItemCo
     return sum(ratios) / len(ratios)
 
 
-def direction_stabilization_fraction(events: list[RawEvent], window: WindowSpec, ctx: ItemContext) -> float | None:
-    """Fraction of the view's own duration (§: "as a fraction of view
-    duration") elapsed before the direction ratio's sign locked in and
-    never changed again, scanning the whole window minus the final
-    1000ms before seal. Lower means direction committed earlier. None
-    under the same conditions as `early_direction_bias`, plus when the
-    final sign in the scanned window is exactly zero (no sign to have
-    stabilized to)."""
+def direction_lock_in_speed(events: list[RawEvent], window: WindowSpec, ctx: ItemContext) -> float | None:
+    """How quickly the direction ratio's sign locked in and never changed
+    again, as a fraction of the view's own duration: `1 - (t_lock -
+    view_start) / view_duration`, scanning the whole window minus the
+    final 1000ms before seal. **Polarity, stated precisely, on purely
+    definitional grounds:** this signal is a constituent of the
+    `directional` composite, which is meant to measure directional
+    *commitment* -- and earlier lock-in is more commitment, not less, so
+    a variable that is supposed to describe commitment must be oriented
+    so that a higher value means *more* of it. An earlier version of
+    this signal (`direction_stabilization_fraction`) counted elapsed time
+    directly, which made it inversely oriented to its own construct: a
+    fast, decisive lock-in produced a *low* number in a family where
+    every other constituent uses "higher = more of the construct." That
+    is a naming/orientation bug, not an empirical finding -- the fix
+    here is definitional (the construct this composite measures is
+    commitment, and commitment should read high when it's high) and
+    makes no reference to this signal's correlation with the outcome or
+    to any recovery number; **that is what separates it from tuning**.
+    See STATE.md for the full reasoning trail, including the empirical
+    correlation numbers that surfaced the naming problem but were not
+    used to decide the fix's direction.
+
+    None under the same conditions as `early_direction_bias`, plus when
+    the final sign in the scanned window is exactly zero (no sign to
+    have locked in to)."""
     if ctx.pointer_type == "touch" or ctx.accept_pos is None or ctx.reject_pos is None:
         return None
     view_duration = window.t_end - window.t_start
@@ -138,8 +156,8 @@ def direction_stabilization_fraction(events: list[RawEvent], window: WindowSpec,
         if s != final_sign:
             break
         t_lock = t
-    fraction = (t_lock - window.t_start) / view_duration
-    return min(1.0, max(0.0, fraction))
+    stabilization_fraction = (t_lock - window.t_start) / view_duration
+    return min(1.0, max(0.0, 1.0 - stabilization_fraction))
 
 
 def _full_trajectory_direction_bias_DIAGNOSTIC_ONLY(events: list[RawEvent], window: WindowSpec, ctx: ItemContext) -> float | None:
@@ -162,5 +180,5 @@ def _full_trajectory_direction_bias_DIAGNOSTIC_ONLY(events: list[RawEvent], wind
 
 DIRECTIONAL_SIGNAL_REGISTRY = {
     "early_direction_bias": early_direction_bias,
-    "direction_stabilization_fraction": direction_stabilization_fraction,
+    "direction_lock_in_speed": direction_lock_in_speed,
 }

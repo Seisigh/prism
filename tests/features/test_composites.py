@@ -15,7 +15,7 @@ def _all_present(value: float = 1.0) -> dict[str, float | None]:
         "acceleration_profile": value, "pause_count": value,
         "max_scroll_depth": value, "scroll_reversals": value, "category_breadth": value, "query_specificity": value,
         "revisit_count": value, "near_substitute_coview_count": value,
-        "early_direction_bias": value, "direction_stabilization_fraction": value,
+        "early_direction_bias": value, "direction_lock_in_speed": value,
     }
 
 

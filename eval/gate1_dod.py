@@ -24,10 +24,28 @@ from scipy.stats import spearmanr
 from sklearn.linear_model import LogisticRegression
 
 from eval.corpus import build_corpus
-from eval.ranker import predict, train_per_mode_rankers
+from eval.ranker import SIGNAL_NAMES, predict, train_per_mode_rankers
 from eval.signal_weighting import fit_population_prior, recover_session_signal_weighting
 from sim.agents import ARCHETYPES
 from sim.embedding import build_item_vectors
+
+
+def _per_signal_correlation_table(rows) -> dict[str, float | None]:
+    """Raw (normalized) per-signal correlation with the `committed` weak
+    label -- reported separately per the author's instruction, so a
+    signal's contribution (the directional pair especially) is visible
+    on its own rather than only as it survives into a composite or a
+    trained model's aggregate rho."""
+    committed = np.array([1.0 if row.committed else 0.0 for row in rows], dtype=float)
+    table: dict[str, float | None] = {}
+    for name in SIGNAL_NAMES:
+        values = np.array([row.signals.get(name) if row.signals.get(name) is not None else np.nan for row in rows])
+        mask = ~np.isnan(values)
+        if mask.sum() < 10 or np.std(values[mask]) == 0:
+            table[name] = None
+            continue
+        table[name] = float(np.corrcoef(values[mask], committed[mask])[0, 1])
+    return table
 
 
 def _rho(rows, predicted) -> float | None:
@@ -104,6 +122,7 @@ def run(sessions_per_condition: int = 10, seed_train: int = 0, seed_holdout: int
             "n_train_sessions": len(train),
             "n_holdout_sessions": len(holdout),
             "modes_with_rankers": sorted(rankers.keys()),
+            "per_signal_correlation": _per_signal_correlation_table(holdout_rows),
         }
 
     real_train, real_holdout = _build(shuffle=False)
@@ -132,6 +151,10 @@ def _print_report(report: dict) -> None:
     print("--- Negative control (shuffled utility) ---")
     print(f"[3] rho (should be ~0): {control['overall_rho']}")
     print(f"[3] archetype accuracy (should be ~chance): {control['archetype_accuracy']:.3f}")
+    print()
+    print("--- Per-signal correlation with `committed` (held-out, real utility) ---")
+    for name, corr in sorted(real["per_signal_correlation"].items(), key=lambda kv: (kv[1] is None, -(abs(kv[1]) if kv[1] is not None else 0))):
+        print(f"    {name:36s} {corr if corr is None else f'{corr:+.3f}'}")
 
 
 if __name__ == "__main__":

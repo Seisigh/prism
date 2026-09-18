@@ -21,6 +21,20 @@ Touch is not modeled by the simulator yet (sim/generative.py has no
 touch motor model) -- every row here has pointer_type="mouse". Flagged
 in STATE.md: the motor-conflict family's recovery is therefore untested
 for touch sessions.
+
+**Two representations, two consumers** (BUILD_BRIEF.md §11, updated
+after Gate 1's ranker recovery stalled -- see STATE.md's "Two consumers,
+two representations" section): every row carries both `signals` (each
+raw signal normalized within (session, mode, surface), one column per
+signal) and `composites` (the same normalized signals averaged into five
+-- now six, with `directional` -- family composites). `eval/ranker.py`
+trains on `signals`: composite-averaging was written for variance
+reduction on a small human corpus, and hand-averaging before a
+gradient-boosted model destroys the interactions a tree ensemble exists
+to find. `eval/signal_weighting.py` still uses `composites`: five (six)
+dimensions is what makes per-session online ridge estimation tractable
+with only that session's own view count as evidence -- a genuinely
+different data regime from the ranker's hundreds of pooled sessions.
 """
 from __future__ import annotations
 
@@ -50,7 +64,8 @@ class ViewFeatureRow:
     utility: float  # ground truth -- never a ranker input, only used for evaluation
     committed: bool
     is_fast_skip: bool
-    composites: dict[str, float | None]  # family -> value
+    signals: dict[str, float | None]  # signal name -> normalized value (the ranker's feature set)
+    composites: dict[str, float | None]  # family -> value (the signal-weighting vector's feature set)
     availability: dict[str, float]  # family -> availability rate
 
 
@@ -141,6 +156,7 @@ def extract_session_features(
                 utility=view.utility,
                 committed=view.committed,
                 is_fast_skip=fast_skip,
+                signals=normalized,
                 composites={f: composite_results[f].value for f in FAMILIES},
                 availability={f: composite_results[f].availability for f in FAMILIES},
             )

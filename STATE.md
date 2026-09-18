@@ -740,6 +740,141 @@ or `eval/gate1_dod.py` prints — the Gate-2 ablation harness (§12, not yet
 built) will inherit that separation automatically once it exists, rather
 than needing special-casing to avoid folding them back into an average.
 
+### `direction_stabilization_fraction` renamed to `direction_lock_in_speed` — a polarity fix, stated on purely definitional grounds
+
+`server/features/signals_directional.py`'s second signal was oriented
+backwards relative to the construct it belongs to. The `directional`
+composite is meant to measure directional *commitment*; earlier lock-in
+is *more* commitment, not less; every other constituent in every other
+composite in this codebase is oriented so that "higher = more of the
+construct." The old `direction_stabilization_fraction` counted elapsed
+time directly, so a fast, decisive lock-in produced a *low* number — the
+opposite orientation. Renamed to `direction_lock_in_speed`, defined as
+`1 - stabilization_fraction`, so a higher value now means faster lock-in
+and the composite goes back to being a plain, unweighted mean of two
+same-oriented signals (no per-signal sign flip needed in
+`composites.py`'s `SIGNAL_FAMILY_MAP`, unlike `query_specificity`'s
+principled inversion elsewhere in the same table).
+
+**Stated explicitly, because it is the exact distinction that separates
+this from tuning:** the justification above never mentions this signal's
+correlation with `committed`, with utility, or with any recovery metric.
+It rests entirely on what the variable's name claims to measure (a
+commitment-strength quantity) versus what its arithmetic actually
+computed (an elapsed-time quantity) — a mismatch that would be a bug to
+fix regardless of what any downstream model did with the number. The
+empirical correlation numbers from the previous entry (raw
+`direction_stabilization_fraction` r=-0.188, opposite in sign to
+`early_direction_bias`'s r=+0.103) are what *surfaced* that the old
+variable's orientation was suspicious enough to go check its definition
+— but they were not the basis for choosing which direction to flip it.
+Renaming and redefining the variable name and its docstring were done
+together so the two can't drift back out of sync silently. All existing
+tests updated (`test_direction_stabilization_fraction_*` ->
+`test_direction_lock_in_speed_*`, values inverted to match); one new
+test (`test_direction_lock_in_speed_higher_when_direction_locks_in_earlier`)
+added to check the polarity directly rather than only checking a single
+worked example.
+
+### Two consumers, two representations — the ranker trains on raw signals, composites stay for the signal-weighting vector
+
+The author's ruling, with the citation note first: the instruction named
+BUILD_BRIEF.md §4.2 and §7.2 as the sections to update, but the actual
+composite/ranker/signal-weighting-vector text lives in **§11** (§4.2 is
+mode's effect on normalization/labels/availability; §7.2 is the raw
+telemetry event-type list) — corrected here rather than silently editing
+the wrong sections or silently reinterpreting without flagging it; §11
+is what was actually amended.
+
+> §4.2's five-composite rule was written for variance reduction on a
+> small human corpus; the ranker trains on 625+ synthetic sessions where
+> that argument does not apply, and hand-averaging before a
+> gradient-boosted model destroys the interactions trees exist to find —
+> which is precisely what was just observed. Composites stay in use for
+> the signal-weighting vector, where five dimensions is what makes
+> per-session estimation tractable. Two consumers, two representations.
+
+Implemented: `eval/features.py`'s `ViewFeatureRow` now carries both
+`signals` (every registered signal, individually normalized within
+(session, mode, surface) — the ranker's new feature set) and `composites`
+(the same normalized signals averaged into families — unchanged,
+still `eval/signal_weighting.py`'s feature set). `eval/ranker.py`'s
+`_feature_row` reads `row.signals` over a fixed, sorted column order
+(`SIGNAL_NAMES`) instead of `row.composites` over `FAMILIES`; nothing
+else about the ranker (objective, per-mode training split, relevance
+grades) changed. BUILD_BRIEF.md §11 updated in place (the "Five family
+composites feed the ranker" line and the "Signal-weighting vector" line)
+to state the split and why. All 181 tests pass; import-linter contract
+holds.
+
+### Recovery rerun after both changes
+
+Same corpus recipe as every prior run (375/375 train/held-out sessions).
+**Reported plainly, not engineered toward the bar** — the author's own
+instruction: the rho > 0.6 threshold is provisional and untuned, and a
+result short of it is not being treated as a failure to close by further
+tweaking.
+
+```
+[1] Overall rho: 0.011 (need > 0.6)   [was 0.099 with composites, 0.074 before the directional signals]
+    Per-session mean rho: 0.069
+    broad_search  0.019   comparison   -0.075   directed_search  -0.119
+    discovery     0.016   refind        0.120
+
+[2] Archetype separation accuracy: 0.341 (need > 0.7, chance 0.20)  [was 0.299]
+
+[3] Negative control: rho = 0.116, archetype accuracy = 0.312
+```
+
+**Honest read of these numbers, not softened:** overall rho *fell* after
+switching the ranker to raw signals (0.099 -> 0.011), and the negative
+control's rho (0.116) now sits *above* the real condition's (0.011).
+Archetype accuracy (0.341) is barely distinguishable from its own
+negative control (0.312). Taken together, this reads as: at the current
+per-mode training-session counts (a few dozen to ~150 sessions per mode
+after the corpus is split five ways), a 17-raw-signal LambdaRank model
+has enough capacity to fit noise as easily as signal, and the resulting
+held-out rho is not reliably different from zero in either direction —
+not a leak (the negative control did not become suspiciously *strong*,
+which is what leakage would look like), just a model that is not yet
+recovering anything stable. No ranker hyperparameter was changed to
+compensate, per instruction.
+
+**Per-signal correlation with `committed`** (held-out split, real
+utility condition — the table the author asked to see reported
+separately from any composite or model score):
+
+```
+direction_lock_in_speed              +0.089
+early_direction_bias                 +0.086
+item_dwell                           -0.079
+scroll_reversals                     -0.058
+near_substitute_coview_count         +0.050
+pause_count                          -0.049
+trajectory_x_flips                   -0.046
+focused_idle                         -0.041
+max_scroll_depth                     -0.030
+acceleration_profile                 +0.024
+trajectory_curvature_auc             -0.020
+revisit_count                        +0.009
+peak_pointer_velocity_on_approach    -0.004
+category_breadth, hover_dwell_on_target, query_specificity, viewport_time:
+  None (fewer than 10 available values or zero variance in this
+  particular held-out split)
+```
+
+The two directional signals are now, individually, the two most
+correlated raw signals with the outcome in this split, and — confirming
+the polarity fix worked as intended — both are now **positively** signed
+(before the fix, the two pointed in opposite directions). That the
+*ranker's* rho did not improve alongside this is the more interesting
+number: a real, correctly-oriented, meaningfully-correlated pair of raw
+features exists in the table above, and a 17-feature gradient-boosted
+model trained on this much data still could not turn it into a stable
+held-out ranking signal. That gap — between "a good feature exists" and
+"the current ranker recovers it reliably" — is left for the author to
+weigh in on, not resolved here.
+
 ---
 
 ## Gate 2 — noted, not started

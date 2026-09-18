@@ -9,7 +9,7 @@ from server.features.signals import ItemContext
 from server.features.signals_directional import (
     DIRECTIONAL_SIGNAL_REGISTRY,
     _full_trajectory_direction_bias_DIAGNOSTIC_ONLY,
-    direction_stabilization_fraction,
+    direction_lock_in_speed,
     early_direction_bias,
 )
 from server.features.window_spec import RawEvent, WindowSpec
@@ -90,7 +90,10 @@ def test_early_direction_bias_blind_to_events_at_or_after_the_view_seal():
     assert baseline_value == poisoned_value
 
 
-def test_direction_stabilization_fraction_finds_the_last_sign_change():
+def test_direction_lock_in_speed_finds_the_last_sign_change():
+    """Sign locks in at t=2000 out of a 6000ms view (stabilization
+    fraction 1/3) -> lock-in speed is 1 - 1/3 = 2/3: higher means the
+    direction committed *earlier*, per the signal's stated polarity."""
     window = WindowSpec(t_start=0.0, t_end=6000.0, seal_reason="view_close")  # pre-exclusion window = [0, 5000)
     events = [
         _pointer(0.0, x=-90.0),
@@ -99,11 +102,11 @@ def test_direction_stabilization_fraction_finds_the_last_sign_change():
         _pointer(3000.0, x=90.0),
         _pointer(4000.0, x=90.0),
     ]
-    value = direction_stabilization_fraction(events, window, _ctx())
-    assert value == 2000.0 / 6000.0
+    value = direction_lock_in_speed(events, window, _ctx())
+    assert value == 1.0 - 2000.0 / 6000.0
 
 
-def test_direction_stabilization_fraction_ignores_the_final_1000ms():
+def test_direction_lock_in_speed_ignores_the_final_1000ms():
     """A sign flip inside the excluded final 1000ms must not move the
     reported lock time -- only the pre-exclusion window is scanned."""
     window = WindowSpec(t_start=0.0, t_end=6000.0, seal_reason="view_close")
@@ -113,19 +116,29 @@ def test_direction_stabilization_fraction_ignores_the_final_1000ms():
         _pointer(3000.0, x=90.0),
         _pointer(5500.0, x=-90.0),  # inside [5000, 6000) -- excluded
     ]
-    value = direction_stabilization_fraction(events, window, _ctx())
-    assert value == 2000.0 / 6000.0
+    value = direction_lock_in_speed(events, window, _ctx())
+    assert value == 1.0 - 2000.0 / 6000.0
 
 
-def test_direction_stabilization_fraction_none_for_touch():
+def test_direction_lock_in_speed_higher_when_direction_locks_in_earlier():
+    window = WindowSpec(t_start=0.0, t_end=6000.0, seal_reason="view_close")
+    early_lock = [_pointer(0.0, x=-90.0), _pointer(500.0, x=90.0), _pointer(1000.0, x=90.0), _pointer(4000.0, x=90.0)]
+    late_lock = [_pointer(0.0, x=-90.0), _pointer(1000.0, x=-90.0), _pointer(3900.0, x=90.0), _pointer(4000.0, x=90.0)]
+    early_speed = direction_lock_in_speed(early_lock, window, _ctx())
+    late_speed = direction_lock_in_speed(late_lock, window, _ctx())
+    assert early_speed is not None and late_speed is not None
+    assert early_speed > late_speed
+
+
+def test_direction_lock_in_speed_none_for_touch():
     window = WindowSpec(t_start=0.0, t_end=6000.0, seal_reason="view_close")
     events = [_pointer(0.0, x=90.0)]
-    assert direction_stabilization_fraction(events, window, _ctx(pointer_type="touch")) is None
+    assert direction_lock_in_speed(events, window, _ctx(pointer_type="touch")) is None
 
 
 def test_diagnostic_only_function_is_not_in_the_real_registry():
     assert "_full_trajectory_direction_bias_DIAGNOSTIC_ONLY" not in DIRECTIONAL_SIGNAL_REGISTRY
-    assert set(DIRECTIONAL_SIGNAL_REGISTRY.keys()) == {"early_direction_bias", "direction_stabilization_fraction"}
+    assert set(DIRECTIONAL_SIGNAL_REGISTRY.keys()) == {"early_direction_bias", "direction_lock_in_speed"}
 
 
 def test_diagnostic_only_function_sees_the_final_position_unlike_the_real_signal():

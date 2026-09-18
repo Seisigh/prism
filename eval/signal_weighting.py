@@ -10,8 +10,17 @@ recover purely from a session's own composite features and outcomes, via
 ridge regression shrunk toward a population prior. A linear probe on the
 recovered vectors classifying which of the five archetypes generated
 each session (>70% required, §11 DoD item 2) is the actual correctness
-check -- if the composites+ranker pipeline didn't preserve real
+check -- if the composite+ranker pipeline didn't preserve real
 archetype-distinguishing information, this recovery has nothing to find.
+
+**This is the one place composites are still the right representation**
+(BUILD_BRIEF.md §11, updated -- see STATE.md's "Two consumers, two
+representations" section): `eval/ranker.py` was switched to training on
+raw signals instead, but a session's own view count is the only evidence
+an online per-session estimator like this one ever has, and five (six,
+with `directional`) dimensions is what keeps that estimation tractable.
+Two consumers, two representations, for two genuinely different data
+regimes -- not an inconsistency to reconcile.
 
 Composites are already z-scored (mean ~0 within their stratum), so
 mean-imputing a missing composite to 0.0 for this *linear-model input*

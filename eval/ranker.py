@@ -8,12 +8,22 @@ shared model would have to learn that interaction from data instead of
 having it built into the training split, and a per-mode split is the
 more honest, more identifiable way to "calibrate per mode."
 
-Features are the five composites (§11: "the deployed model uses
-composites"), never the raw signals directly and never `utility` (the
-hidden ground truth). Missing composites are passed to LightGBM as NaN,
-which it treats as a first-class missing value with a learned split
-direction -- unlike the ridge recovery in signal_weighting.py, this
-does not need a numeric imputation convention.
+Features are the raw (normalized) signals, never the five family
+composites and never `utility` (the hidden ground truth). This changed
+from an earlier version that fed the ranker composites, per the author's
+explicit correction (BUILD_BRIEF.md §11, updated; see STATE.md's "Two
+consumers, two representations" section): composite-averaging was
+written for variance reduction on a small human corpus, and it does not
+apply to a gradient-boosted ranker trained on hundreds of synthetic
+sessions, where hand-averaging signals into five numbers before a tree
+model sees them destroys exactly the interactions trees exist to find.
+`eval/signal_weighting.py` is the one consumer that still uses
+composites, for a genuinely different reason (see that module).
+
+Missing signals are passed to LightGBM as NaN, which it treats as a
+first-class missing value with a learned split direction -- unlike the
+ridge recovery in signal_weighting.py, this does not need a numeric
+imputation convention.
 """
 from __future__ import annotations
 
@@ -24,7 +34,11 @@ import numpy as np
 from lightgbm import LGBMRanker
 
 from eval.corpus import CorpusSession
-from server.features.composites import FAMILIES
+from eval.features import ALL_SIGNALS
+
+# A fixed, sorted column order -- every feature row and every trained
+# model must agree on which position is which signal.
+SIGNAL_NAMES = sorted(ALL_SIGNALS.keys())
 
 RELEVANCE_COMMITTED = 2
 RELEVANCE_AMBIGUOUS = 1
@@ -32,7 +46,7 @@ RELEVANCE_FAST_SKIP = 0
 
 
 def _feature_row(row) -> list[float]:
-    return [row.composites[f] if row.composites[f] is not None else np.nan for f in FAMILIES]
+    return [row.signals[name] if row.signals.get(name) is not None else np.nan for name in SIGNAL_NAMES]
 
 
 def _relevance(row) -> int:

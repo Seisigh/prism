@@ -48,7 +48,7 @@ Reasoning per family:
 
 **Guard, stated explicitly because it is the exact place direction died
 the first time:** nothing in this module may take `abs()` or any other
-magnitude of `early_direction_bias` or `direction_stabilization_fraction`
+magnitude of `early_direction_bias` or `direction_lock_in_speed`
 before averaging it into the `directional` composite. A signed signal
 averaged together with unsigned ones is fine (that's what happens below);
 discarding the sign is not.
@@ -89,7 +89,7 @@ SIGNAL_FAMILY_MAP: dict[str, tuple[str, float]] = {
     "revisit_count": ("comparison", 1.0),
     "near_substitute_coview_count": ("comparison", 1.0),
     "early_direction_bias": ("directional", 1.0),
-    "direction_stabilization_fraction": ("directional", 1.0),
+    "direction_lock_in_speed": ("directional", 1.0),
 }
 
 # Signals with no family (fed to the ranker raw, or consumed elsewhere):

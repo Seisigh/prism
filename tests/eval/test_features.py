@@ -4,7 +4,7 @@ import random
 
 import pytest
 
-from eval.features import extract_session_features
+from eval.features import ALL_SIGNALS, extract_session_features
 from sim.agents import ARCHETYPES
 from sim.embedding import build_item_vectors
 from sim.session import SessionGoal, simulate_session
@@ -37,6 +37,16 @@ def test_every_row_carries_all_families_including_directional():
             "attention", "motor_conflict", "exploration", "comparison", "directional", "availability",
         }
         assert set(row.availability.keys()) == set(row.composites.keys())
+
+
+def test_every_row_carries_every_raw_signal_by_name():
+    """The ranker's actual feature set (eval/ranker.py): one normalized
+    value per registered signal, not folded into a composite."""
+    rng = random.Random(2)
+    session = simulate_session("s2b", ARCHETYPES["skimmer"], _kitchen_items(), 15, rng)
+    rows = extract_session_features(session, ITEM_VECTORS)
+    for row in rows:
+        assert set(row.signals.keys()) == set(ALL_SIGNALS.keys())
 
 
 def test_utility_is_carried_through_unmodified_for_evaluation_only():

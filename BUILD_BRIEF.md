@@ -457,7 +457,7 @@ Nothing in Gate 1 begins until all of these are true.
 
 **Ranker.** LambdaRank over within-session item pairs, not pointwise classification. ~20 items per session becomes ~190 comparisons, which is the difference between trainable and not. Calibrated per mode.
 
-**Five family composites** feed the ranker: attention, motor conflict, exploration, comparison, availability. Raw signals are stored for ablation; the deployed model uses composites.
+**The ranker trains on raw (normalized) signals, not the five family composites.** [Amended — the composite-averaging rule below was originally written for variance reduction on a small human corpus. It does not apply to a gradient-boosted ranker trained on hundreds of synthetic sessions, and hand-averaging signals into five numbers before a tree model sees them destroys exactly the interactions trees exist to find. Signals are still normalized within (session, mode, surface) per §4.2; only the further step of averaging normalized signals into family composites is skipped for this consumer. See the signal-weighting vector below for the one place composites are still the right representation, and STATE.md for the recovery numbers that surfaced this.] Raw signals are stored for ablation regardless of which representation any given consumer trains on.
 
 **Build the simulator before the ranker.** The ranker trains primarily on synthetic sessions, so it cannot exist first. Order within Gate 1: simulator, then calibration against real traces, then ranker, then profile updater.
 
@@ -477,7 +477,7 @@ Until a session has 3 scored views, serve the population prior rather than the s
 
 Unit tests assert unit norm after arbitrary update sequences, bounded magnitude, and convergence into the correct region of item space for a scripted preference sequence.
 
-**Signal-weighting vector.** Five composite weights, initialized at the prior fit on simulated data, updated within session by online ridge regression, shrunk toward the prior by evidence count. No hierarchical model, no clustering.
+**Signal-weighting vector.** Five composite weights (attention, motor conflict, exploration, comparison, availability — plus `directional` where that family exists), initialized at the prior fit on simulated data, updated within session by online ridge regression, shrunk toward the prior by evidence count. No hierarchical model, no clustering. This is the one consumer that keeps the composite representation: a session's own view count is the only evidence an online per-session estimator has, and five (or six) dimensions is what keeps that estimation tractable — a different data regime from the ranker above, which is why the two now train on two different representations of the same underlying signals rather than one.
 
 **Simulator.** Five archetypes — Skimmer, Deliberator, Price-hunter, Image-driven, Spec-reader — each with a known taste vector and a known signal-weighting vector.
 
