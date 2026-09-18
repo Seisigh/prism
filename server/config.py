@@ -26,5 +26,13 @@ class Settings(BaseSettings):
     catalog_path: Path = REPO_ROOT / "data" / "catalog.json"
     thumbs_dir: Path = REPO_ROOT / "data" / "thumbs"
 
+    # §6.7: "behind authentication in every environment including local:
+    # a single password read from the environment, a signed session
+    # cookie, no user accounts." No default for the password -- a
+    # deployment that never set one should fail closed (admin_auth.py
+    # refuses every login attempt), not fall back to a guessable value.
+    admin_password: str | None = None
+    admin_session_secret: str = "prism-dev-admin-secret-change-in-production"
+
 
 settings = Settings()

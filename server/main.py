@@ -16,6 +16,7 @@ from fastapi.staticfiles import StaticFiles
 
 from server.catalog_store import get_store
 from server.config import settings
+from server.ingest.admin_routes import router as admin_router
 from server.ingest.routes import router as ingest_router
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
@@ -43,6 +44,7 @@ settings.thumbs_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/media/thumbs", StaticFiles(directory=str(settings.thumbs_dir)), name="thumbs")
 
 app.include_router(ingest_router)
+app.include_router(admin_router)
 
 
 @app.get("/api/health")

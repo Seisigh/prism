@@ -1,0 +1,82 @@
+"""server/ingest/admin_routes.py: the admin console API, end to end
+through the real FastAPI app -- auth is the load-bearing thing to prove
+actually works, not just the pure functions it's built from."""
+import pytest
+import redis.asyncio as redis
+from httpx import ASGITransport, AsyncClient
+
+from server.config import settings
+from server.ingest.admin_auth import COOKIE_NAME
+from server.main import app
+
+pytestmark = pytest.mark.asyncio
+
+
+async def _pg_or_skip():
+    import asyncpg
+
+    try:
+        conn = await asyncpg.connect(dsn=settings.database_url)
+        await conn.close()
+    except Exception:
+        pytest.skip("Postgres not reachable")
+
+
+async def _redis_or_skip():
+    r = redis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        await r.ping()
+    except Exception:
+        pytest.skip("Redis not reachable")
+
+
+@pytest.fixture(autouse=True)
+def _set_admin_password(monkeypatch):
+    monkeypatch.setattr(settings, "admin_password", "test-password-123")
+
+
+async def _client():
+    return AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
+
+
+async def test_whoami_unauthenticated():
+    async with await _client() as client:
+        resp = await client.get("/api/admin/whoami")
+        assert resp.status_code == 200
+        assert resp.json() == {"authenticated": False}
+
+
+async def test_login_rejects_wrong_password():
+    async with await _client() as client:
+        resp = await client.post("/api/admin/login", json={"password": "wrong"})
+        assert resp.status_code == 401
+
+
+async def test_login_accepts_correct_password_and_sets_a_cookie():
+    async with await _client() as client:
+        resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        assert resp.status_code == 200
+        assert COOKIE_NAME in resp.cookies
+
+
+async def test_sessions_list_requires_authentication():
+    async with await _client() as client:
+        resp = await client.get("/api/admin/sessions")
+        assert resp.status_code == 401
+
+
+async def test_sessions_list_succeeds_once_logged_in():
+    await _pg_or_skip()
+    await _redis_or_skip()
+    async with await _client() as client:
+        login_resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        client.cookies.set(COOKIE_NAME, login_resp.cookies[COOKIE_NAME])
+        resp = await client.get("/api/admin/sessions")
+        assert resp.status_code == 200
+        assert "sessions" in resp.json()
+
+
+async def test_new_profile_requires_authentication():
+    async with await _client() as client:
+        resp = await client.post("/api/admin/new-profile")
+        assert resp.status_code == 401

@@ -87,11 +87,27 @@ def extract_session_features(
     views: list[LiveView],
     pointer_type: str = "mouse",
 ) -> list[dict[str, float | None]]:
-    """One normalized-signal dict per view in `views` (same order),
-    computed against the *real* stored event log. Population for
-    z-scoring within (mode, surface) is every view in `views` sharing
-    that stratum, including future ones in this list -- for a batch call
-    over a session's whole history so far that's correct (mirrors
+    """One normalized-signal dict per view in `views` (same order). Thin
+    wrapper over `extract_session_features_with_raw` for callers (the
+    live scoring path) that only need the ranker's own input, not the
+    raw values too."""
+    return [normalized for _raw, normalized in extract_session_features_with_raw(event_rows, views, pointer_type)]
+
+
+def extract_session_features_with_raw(
+    event_rows: list[dict],
+    views: list[LiveView],
+    pointer_type: str = "mouse",
+) -> list[tuple[dict[str, float | None], dict[str, float | None]]]:
+    """One `(raw, normalized)` pair per view in `views` (same order),
+    computed against the *real* stored event log -- the admin console's
+    session signal table (§6.7 item 2: "every signal in three columns:
+    raw value, normalized value, and availability") needs both; the live
+    scoring path only needs the normalized half, via
+    `extract_session_features` above. Population for z-scoring within
+    (mode, surface) is every view in `views` sharing that stratum,
+    including future ones in this list -- for a batch call over a
+    session's whole history so far that's correct (mirrors
     eval/features.py); a live caller that wants strictly causal
     normalization should only pass views up to and including the
     trigger."""
@@ -138,11 +154,12 @@ def extract_session_features(
             if value is not None:
                 bucket[name].append(value)
 
-    normalized_by_view = []
+    out = []
     for view, raw in zip(views, raw_by_view):
         population = stratum_population[(view.mode, view.surface)]
-        normalized_by_view.append({name: z_score(v, population[name]) if v is not None else None for name, v in raw.items()})
-    return normalized_by_view
+        normalized = {name: z_score(v, population[name]) if v is not None else None for name, v in raw.items()}
+        out.append((raw, normalized))
+    return out
 
 
 def view_is_fast_skip(view: LiveView, all_views: list[LiveView], commitment_events: list[CommitmentEvent]) -> bool:
