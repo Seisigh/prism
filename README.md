@@ -393,7 +393,19 @@ and modes side by side.
 > numbers above (efficiency 0.178 for interest ranking, 0.513 for
 > archetype separation) are the honest, ceiling-relative headline —
 > see ["The bar was wrong"](#the-bar-was-wrong-a-negative-control-that-couldnt-fail-and-what-replaced-both)
-> for why a fixed target number isn't reported instead. Browsing mode's
+> for why a fixed target number isn't reported instead. The ranker was
+> trained entirely on simulated sessions, and the simulator only ever
+> produces card-impression-shaped views (§Screens' `detail-view-start`
+> gap, closed in the live path after this point — see `STATE.md`) — so
+> the deployed scorer now sees a real surface (`detail`) the simulator
+> has never produced a single training example of, with dwell
+> distributions outside anything it trained on and a per-(session, mode,
+> surface) normalizer that will be unstable on that stratum until enough
+> detail views accumulate in a session. **Live interest scores are not
+> covered by the reported recovery numbers above, which were measured on
+> card impressions only.** This is stated rather than fixed by adding
+> detail views to the simulator, which would be a real change to the
+> generative model and is out of scope for a close-out pass. Browsing mode's
 > measured contribution to a future ablation will be partly a
 > consequence of how the simulator itself was parameterized (see
 > `STATE.md`'s per-mode DDM priors) — those per-mode priors are stated

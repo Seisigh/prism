@@ -11,6 +11,12 @@ from pydantic import BaseModel, Field
 Surface = Literal["home", "category", "search", "detail", "compare", "cart"]
 Mode = Literal["discovery", "directed_search", "broad_search", "comparison", "refind"]
 
+# detail_view_start/detail_view_end are diagnostic only -- stored and
+# shown in the admin event-log viewer, never read by replay.py, live.py,
+# or anything in features/. The detail page's real view_start/view_end
+# (surface: detail, same tracked-card mechanism every other surface uses)
+# is what actually feeds the pipeline. See web/src/lib/eventSchema.ts,
+# the single source of truth this set should stay a superset of.
 EVENT_TYPES = {
     "page_view", "item_impression", "view_start", "view_end", "detail_view_start", "detail_view_end",
     "pointer_batch", "scroll_batch", "hover_start", "hover_end", "click", "zoom", "gallery_advance",

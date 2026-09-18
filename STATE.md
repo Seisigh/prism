@@ -1798,3 +1798,58 @@ the latter changed globally (Rating is also used on `ItemCard` and
 Verified live: re-captured `compare-768.png` shows every rating cell
 clean, no overlap, count fully visible on all five columns. 1440px
 unaffected (confirmed — plenty of width, wrap never triggers).
+
+### The detail-page dwell gap: fix (a) implemented
+
+Per the author's explicit choice between the two shapes described above.
+`web/src/pages/Detail/Detail.tsx` now wraps its `Gallery` in a
+`heroRef`-tracked div and calls the same `sdk.registerItemCard`/
+`unregisterItemCard` every grid/rail/compare/cart card already uses,
+keyed to the item's own id. No changes needed anywhere else —
+`getSurface()` (`PrismSDKContext.tsx`) already resolves `/item/:id` to
+`"detail"`, and `item_view.py`'s `Surface` literal and `_SURFACE_DEPTH`
+already had `"detail"` as a first-class, highest-precedence surface with
+a passing multi-surface-tie fixture exercising it — this was a missing
+data source, not a missing consumer, exactly as diagnosed. Also already
+validated end-to-end before today: Gate 2's load test
+(`eval/load_test.py`) has been simulating "detail page" dwell since it
+was written, by sending synthetic `view_start`/`view_end` with
+`surface="detail"` — the exact shape this fix makes real; the §12 p95
+latency numbers in this file were measured against that shape.
+
+**Verified live**, not just by `tsc`: fresh session, real consent
+accept, navigated to a product detail page, dwelled ~8s, navigated away
+via an in-page link. `/api/sessions/{id}/views` returned a real
+`item_view`: `surface: "detail"`, `duration_ms: 8420`,
+`closed_by: "visibility_timeout"` — the first one this system has ever
+recorded, live or offline. `tsc --noEmit` clean, full suite still green
+(see the commit this section is part of for the count).
+
+`detail_view_start`/`detail_view_end` are kept, per the author's
+instruction, rather than retired — still real, still stored, still
+shown in the admin console's event-log viewer for a human debugging a
+session by hand. Marked diagnostic-only in `web/src/lib/eventSchema.ts`
+(the single source of truth the public "what gets recorded" page
+renders) and in `server/ingest/envelope.py`'s `EVENT_TYPES`, so nobody
+later assumes they feed the model. They never did, and still don't —
+`replay.py`, `live.py`, and everything in `features/` only ever read
+`view_start`/`view_end`.
+
+**A consequence flagged, not fixed:** the ranker was trained entirely on
+`sim/session.py`, which — checked directly, no call anywhere in `sim/`
+or `eval/` ever passes anything but the default `surface="category"` —
+has never produced a single view tagged `surface="detail"` or anything
+resembling a detail-page dwell distribution. The deployed scorer now
+sees a real stratum (session, mode=*, surface="detail") the ranker has
+zero training examples for, and the within-(session, mode, surface)
+normalizer (`normalize.py`) will be unstable on that stratum for any
+session until enough detail views accumulate within it. This is
+acceptable — the simulator is where the recovery numbers come from, the
+live path is a demonstration of the pipeline working, not a claim about
+live recovery — but it must be stated, not discovered: **live interest
+scores are not covered by the Gate 1 recovery numbers, which were
+measured on card impressions only.** Also stated in `README.md`'s
+honesty section. Not fixed by adding detail views to `sim/session.py` —
+that changes the generative model (a decision this project has
+repeatedly reserved for the author, e.g. the DDM priors, the motor-model
+coupling) and is out of scope here.

@@ -1,5 +1,5 @@
 import { FlaskConical, Heart, ShoppingCart } from 'lucide-react'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { Button } from '../../components/Button/Button'
 import { Gallery } from '../../components/Gallery/Gallery'
@@ -24,6 +24,7 @@ export function Detail() {
   const { add } = useCart()
   const { has, toggle } = useWishlist()
   const sdk = usePrismSDK()
+  const heroRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     setItem(null)
@@ -40,6 +41,24 @@ export function Detail() {
     sdk.trackDetailViewStart(itemId)
     return () => sdk.trackDetailViewEnd(itemId)
   }, [sdk, itemId])
+
+  // The one registerItemCard the product being looked at on its own page
+  // never had: every other surface (grid/rail/compare/cart cards) feeds
+  // the canonical view pipeline through this same registration, but the
+  // detail page's own hero region never called it, so real detail-page
+  // dwell has never produced a scored `item_view` — see STATE.md's
+  // "Close-out pass" section. `getSurface()` (PrismSDKContext) already
+  // resolves `/item/:id` to `"detail"`, and item_view.py's surface
+  // precedence already ranks `"detail"` above grid/rail — this was the
+  // missing data source, not a missing consumer. Depends on `item`
+  // (not just `itemId`) so it only registers once the ref is actually
+  // attached to a loaded item's hero element.
+  useEffect(() => {
+    if (!sdk || !heroRef.current || !item || item === 'not-found') return
+    const el = heroRef.current
+    sdk.registerItemCard(el, item.item_id)
+    return () => sdk.unregisterItemCard(el)
+  }, [sdk, item])
 
   useEffect(() => {
     if (!sdk) return
@@ -76,14 +95,16 @@ export function Detail() {
       </div>
 
       <div className={styles.layout}>
-        {item.images ? (
-          <Gallery
-            images={item.images}
-            alt={item.alt_text}
-            onZoom={() => sdk?.trackZoom(item.item_id)}
-            onAdvance={(i) => sdk?.trackGalleryAdvance(item.item_id, i)}
-          />
-        ) : null}
+        <div ref={heroRef}>
+          {item.images ? (
+            <Gallery
+              images={item.images}
+              alt={item.alt_text}
+              onZoom={() => sdk?.trackZoom(item.item_id)}
+              onAdvance={(i) => sdk?.trackGalleryAdvance(item.item_id, i)}
+            />
+          ) : null}
+        </div>
 
         <div className={styles.infoCol}>
           {item.badges[0] ? (

@@ -24,8 +24,15 @@ export const EVENT_TYPES = [
   { type: 'item_impression', description: "An item's card entered the screen." },
   { type: 'view_start', description: "An item's card became more than half visible for at least 300ms." },
   { type: 'view_end', description: 'That view closed (scrolled away, navigated, or the tab lost focus).' },
-  { type: 'detail_view_start', description: 'A product detail page was opened.' },
-  { type: 'detail_view_end', description: 'That detail page was left.' },
+  {
+    type: 'detail_view_start',
+    description:
+      'A product detail page was opened. Diagnostic only — stored and shown in the admin event-log viewer for human debugging, not read by the feature pipeline or the model. The detail page’s own view_start/view_end (from the same tracked-card mechanism as every other surface, tagged surface: detail) is what actually feeds it.',
+  },
+  {
+    type: 'detail_view_end',
+    description: 'That detail page was left. Diagnostic only — see detail_view_start.',
+  },
   { type: 'pointer_batch', description: 'A short batch of cursor positions, sampled about 60 times a second.' },
   { type: 'scroll_batch', description: 'A short batch of scroll positions.' },
   { type: 'hover_start', description: 'The cursor rested over something.' },
