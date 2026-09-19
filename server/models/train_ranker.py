@@ -53,11 +53,25 @@ def train_and_save(output_dir: Path = ARTIFACTS_DIR, sessions_per_condition: int
         mode_ranker.model.booster_.save_model(str(booster_path))
 
         # In-sample Platt scaling: raw score -> P(committed) for this mode.
+        # class_weight="balanced" -- found live, not assumed: `committed`
+        # is 82-93% positive per mode in this corpus (the DDM's own
+        # commit-rate base rate against this catalog slice, not a bug in
+        # the label), which without this reweighting fits a Platt
+        # intercept of +2.1 to +4.3 -- i.e. p_i already sits at
+        # sigmoid(intercept) = 0.89-0.99 at a raw score of *zero*, before
+        # the feature does any discriminating at all. Every mode's stored
+        # views ended up with predicted_p_i > 0.96 (see STATE.md's
+        # "Calibration was saturating" investigation for the full
+        # measurement). Balancing the fit doesn't change what a
+        # committed/non-committed example looks like, only how much the
+        # intercept is allowed to dominate over the feature -- it's the
+        # standard adjustment for probability calibration under label
+        # imbalance, not a threshold hack.
         rows = [row for cs in train for row in cs.rows if row.mode == mode]
         X = np.array([_feature_row(row) for row in rows])
         scores = mode_ranker.model.predict(X)
         committed = np.array([1 if row.committed else 0 for row in rows])
-        calibrator = LogisticRegression()
+        calibrator = LogisticRegression(class_weight="balanced")
         if len(set(committed.tolist())) < 2:
             calibrator = None  # degenerate mode (all-commit or none) -- no calibration possible
         else:

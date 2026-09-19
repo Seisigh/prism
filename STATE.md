@@ -1996,3 +1996,145 @@ already uses).
    by `sim/embedding.py`, which exists, but the PCA fit itself and its
    storage format don't), then View A, then View B if time remains
    within the one-day box.
+
+---
+
+## Calibration was saturating: found, root-caused, fixed
+
+Asked to investigate `predicted_p_i` reading 0.96-0.999 for nearly every
+stored view. One premise in the ask didn't hold up and is worth
+correcting precisely rather than quietly working around: there is no
+"§7.2 specified isotonic calibration" anywhere in `BUILD_BRIEF.md` —
+grepped for "isotonic," zero hits in this project's own source or docs.
+§7.2 is the raw telemetry event-type list (confirmed earlier this file,
+"Two consumers, two representations" section). §11, the section that
+actually discusses calibration, doesn't specify a method either —
+`train_ranker.py`'s own docstring already said as much before this
+investigation ("Calibration, stated precisely since §11 doesn't specify
+a method"). So the bug isn't "isotonic was required and Platt scaling
+was substituted" — a real, correctly-implemented Platt-scaling
+calibrator (`sklearn.linear_model.LogisticRegression`, fit per mode,
+loaded and applied correctly by `ranker_store.score()`) was genuinely
+running. The hypothesis of a bare sigmoid standing in for calibration
+was checked directly and ruled out — `ranker_store.score()` calls
+`calibrator.predict_proba`, a real fitted model, not a hardcoded
+transform.
+
+**The actual measurement, before any change** (queried live: all 97
+real stored sessions, 1186 views, replayed through the exact
+`admin_signals.py` pipeline the admin console itself uses):
+
+```
+min 0.428  p10 0.831  p25 0.971  median 0.999  p75 0.999  p90 0.999  p99 0.999  max 1.000
+mean 0.957, 86.0% of all views in [0.9, 1.0), 78.4% above 0.96
+```
+
+**Root cause, traced mechanically, not guessed:** the calibrator is fit
+on `committed` (the DDM's `committed_positive` outcome) from the same
+625-session corpus the ranker trains on. That label is **82-93%
+positive per mode** (discovery 89.4%, directed_search 85.8%,
+broad_search 89.6%, comparison 93.3%, refind 82.6% — measured directly
+by rebuilding the exact training corpus) — a real fact about this
+catalog slice's utility distribution and the DDM's own commit dynamics,
+not a labeling bug. An **unweighted** Platt fit on that imbalance
+produces large positive intercepts (+2.15 to +4.28 depending on mode,
+measured from the persisted `calibrator_*.pkl` artifacts directly) —
+meaning `p_i = sigmoid(intercept)` already sits at 0.89-0.99 **at a raw
+ranker score of zero**, before the feature does any discriminating at
+all. Real stored sessions' raw scores are also mostly positive (p10
+−0.60, median 1.41, p90 1.44 — measured directly), landing almost
+entirely in the calibration curve's already-saturated region. The
+result: a `p_i` that's technically a real probability estimate, but one
+so dominated by the imbalanced intercept that it barely functions as a
+per-item discriminator — exactly the failure the author named ("a score
+that is 0.99 for everything is not a score").
+
+**Fixed**: `LogisticRegression(class_weight="balanced")` in
+`train_ranker.py`'s calibrator fit — the standard adjustment for
+probability calibration under label imbalance, not a threshold hack.
+Verified on the real training corpus before committing to it: balanced
+intercepts drop to +0.52 to +2.09, and calibrated `p_i` on the training
+set's own score range now spans the *full* [0.0008, 0.9999] interval
+per mode (checked directly, not assumed from the intercept alone) —
+real discrimination exists in the model, it was just being suppressed
+by the unweighted intercept. **Does not touch or retroactively change
+any reported Gate 1 recovery number** — confirmed directly:
+`eval/gate1_dod.py`'s ceiling probes use their own separate
+`LogisticRegression`, and `eval/ablation.py` already documents that its
+own evaluation is "a deliberate divergence" from this calibrator; the
+rho/archetype-accuracy efficiency numbers (0.178 / 0.513) are computed
+from raw ranker scores directly, never from `p_i`. Only `p_i` itself and
+`taste_vector.py`'s `w_i = clip(2*p_i - 1, ...)` are affected.
+
+Regression test added (`tests/models/test_ranker_store.py`,
+`test_calibrator_is_fit_with_balanced_class_weight`) — checks the fitted
+calibrator's own stored `class_weight` config directly rather than
+output statistics, which would be unreliable at the test file's
+deliberately tiny training scale. Production artifacts retrained
+(`python -m server.models.train_ranker`) and the local backend restarted
+against them.
+
+**One honest caveat, re-measured after the fix, not glossed over**: the
+real stored sessions used to measure this are almost entirely my own
+browser-automation test traffic from earlier close-out work — narrow,
+atypical dwell/scroll patterns, heavily discovery-mode, with raw ranker
+scores that barely vary (p10 to p90 is −0.60 to 1.44 — nearly flat).
+Re-measured live post-fix: median `p_i` across those same 1186 views
+only moved from 0.999 to 0.984, still 92.1% in [0.9, 1.0). This is *not*
+a sign the fix is incomplete — it's confirmed by the training-corpus
+check above that the calibrator now genuinely discriminates across its
+full input range; this local dataset's raw scores just don't span much
+of that range to begin with, because it isn't representative organic
+browsing. This is the same gap already documented above ("Live interest
+scores are not covered by the Gate 1 recovery numbers") showing up a
+second way. Not chasing a better-looking number on this contaminated
+local dataset by further retuning — that's exactly the kind of
+after-the-fact measurement adjustment this project's practice forbids.
+
+### The two other things checked on the same screen
+
+**The 94,662ms category-surface view with `focused_idle` unavailable —
+not a bug.** Traced to a specific real session
+(`4f866908-2cba-4a2d-856d-dace187ab487`) from this project's own recent
+close-out testing: ten items registered simultaneously off a home-page
+rail, then the browser tab sat genuinely idle (no pointer samples at
+all — this session was driven by tool automation with long gaps between
+actions, not continuous human input) until `visibility_timeout` closed
+them, exactly the mechanism that closed-by reason exists for.
+`focused_idle`'s signal function (`signals_gate1.py`) requires 2+
+pointer samples in-window and returns `None` otherwise — checked
+directly — so its unavailability here is the correct, non-imputed
+response to a window with zero real interaction samples, per §9.2's
+"never impute" rule, not a failure to close on tab blur. Recommend
+clearing this contaminated local dev data before it affects the admin
+console's own distribution displays; not a code fix.
+
+**`category_breadth` histograms spiked at one edge — traced to
+something more specific than skew.** Checked the *training* side first:
+`category_breadth` (distinct categories seen so far this session) is
+**`None` for literally 100% of the 13,690-row Gate 1 training corpus**
+— not just skewed low. Root cause: every simulated session draws its
+item pool from a single category (`sim/session.py`'s design), so the
+raw signal is a *constant* (always 1) within every session, and
+`normalize.z_score` correctly returns `None` for a zero-variance
+population (its own documented contract) — both `category_breadth` and
+`z_score` behave exactly as written; the structural constraint is
+upstream, in what the simulator's generative process can produce. This
+is the precise, previously-unstated mechanism behind the ablation
+finding already published in `README.md` ("category breadth... 
+contribute *exactly* zero: LightGBM found no useful split") — that
+write-up's framing ("this model... isn't using everything it's given")
+reads as the model examining real variation and finding it uninformative;
+the truer statement is the model never had a single non-missing training
+example of this signal to examine. Worth a correction to that framing
+(not done here — flagging precisely rather than silently rewording a
+published result). Real stored sessions are less degenerate (49.0% at
+breadth=1, 32.5% at breadth=9, the rest scattered 2-8 — measured
+directly) since real browsing, unlike the simulator, can cross category
+boundaries — but single-category sessions genuinely are the common case
+there too, so the same "spiked at the low edge" shape shows up for a
+real, not spurious, reason. No code bug in `category_breadth` or
+`z_score`; the simulator's single-category-per-session design is a
+generative-model property, the same category of decision this project
+has repeatedly reserved for the author (DDM priors, motor coupling) —
+flagging, not changing it here.

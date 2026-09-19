@@ -4,6 +4,8 @@ pytest. Not a claim about the real deployed artifacts' quality -- those
 are trained separately at image-build time (`python -m
 server.models.train_ranker`, no override) and reported in STATE.md.
 """
+import json
+
 import pytest
 
 from sim.embedding import build_item_vectors
@@ -53,3 +55,29 @@ def test_is_trained_false_when_no_manifest(tmp_path, monkeypatch):
 
     monkeypatch.setattr(ranker_store, "ARTIFACTS_DIR", tmp_path / "nothing_here")
     assert ranker_store.is_trained() is False
+
+
+def test_calibrator_is_fit_with_balanced_class_weight(tmp_path):
+    """Regression for the p_i-saturation bug: `committed` is 82-93%
+    positive per mode in the real training corpus (the DDM's own commit
+    base rate, not a labeling error), and an unweighted Platt fit turns
+    that imbalance into a +2 to +4 intercept -- p_i already sits at
+    sigmoid(intercept) = 0.89-0.99 at a raw score of zero, before the
+    feature discriminates anything. Checked directly on the fitted
+    calibrator's own stored config rather than on output values, which
+    would be unreliable at this test's tiny training scale."""
+    import pickle
+
+    from server.models import train_ranker
+
+    train_ranker.train_and_save(output_dir=tmp_path, sessions_per_condition=2)
+    manifest = json.loads((tmp_path / "manifest.json").read_text(encoding="utf-8"))
+    checked_any = False
+    for mode in manifest["modes"]:
+        with open(tmp_path / f"calibrator_{mode}.pkl", "rb") as f:
+            calibrator = pickle.load(f)
+        if calibrator is None:
+            continue  # degenerate mode at this tiny scale -- nothing to check
+        assert calibrator.class_weight == "balanced"
+        checked_any = True
+    assert checked_any, "expected at least one non-degenerate calibrator to check"
