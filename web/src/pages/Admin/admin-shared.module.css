@@ -82,12 +82,31 @@
    silently clips any table wider than the panel with no way to reach
    the rest -- a real defect found live at 768px where three columns,
    including the only link to Live view, were completely unreachable.
-   `.tableScroll` wraps the `<table>` (not applied to the table itself --
-   `display: block` on the table element broke colSpan rows, which lost
-   the header row's column-width sync and collapsed to a single
-   column's width) so only the table area scrolls horizontally. */
+   `.tableScrollOuter` + `.tableScroll` wrap the `<table>` (not applied to
+   the table itself -- `display: block` on the table element broke
+   colSpan rows, which lost the header row's column-width sync and
+   collapsed to a single column's width): `.tableScrollOuter` is the
+   non-scrolling fade/arrow anchor (see ScrollableRegion,
+   useScrollAffordance), `.tableScroll` is the element that actually
+   scrolls. Reaching the content was already fixed here; a plain native
+   scrollbar with no other cue was the milder version of the same
+   defect class -- nothing told a viewer there was more to scroll to. */
+.tableScrollOuter {
+  composes: fadeOuter from '../../styles/scrollFade.module.css';
+}
+
 .tableScroll {
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tableScroll:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.tableScroll::-webkit-scrollbar {
+  display: none;
 }
 
 .table {

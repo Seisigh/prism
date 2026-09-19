@@ -18,8 +18,27 @@
   max-width: var(--measure);
 }
 
+/* This table's background is the page's own --surface-alt (no white
+   card wraps it here, unlike the admin console's .panel), so the fade
+   has to match that or the gradient would visibly seam against a
+   lighter default. */
+.tableScrollOuter {
+  composes: fadeOuter from '../../styles/scrollFade.module.css';
+  --scroll-fade-bg: var(--surface-alt);
+}
+
 .tableScroll {
   overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tableScroll:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+}
+
+.tableScroll::-webkit-scrollbar {
+  display: none;
 }
 
 .table {

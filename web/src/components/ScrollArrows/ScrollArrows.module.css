@@ -1,0 +1,31 @@
+/* Colors come from custom properties so one arrow style works on light
+   panels and the dark admin topbar alike -- the container that renders
+   these (e.g. Header's .navStripOuter, AdminLayout's .navOuter) sets
+   --scroll-arrow-bg / --scroll-arrow-color / --scroll-arrow-hover-color
+   when its own background isn't the default light surface; the values
+   here are the light-surface default. */
+.arrow {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 2;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  border: none;
+  background: var(--scroll-arrow-bg, var(--surface));
+  color: var(--scroll-arrow-color, var(--slate));
+  cursor: pointer;
+}
+
+.arrow:hover {
+  color: var(--scroll-arrow-hover-color, var(--ink));
+}
+
+.arrowLeft {
+  left: 0;
+}
+
+.arrowRight {
+  right: 0;
+}

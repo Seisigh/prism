@@ -3,6 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { ProductImage } from '../../components/ProductImage/ProductImage'
 import { Price } from '../../components/Price/Price'
 import { Rating } from '../../components/Rating/Rating'
+import { ScrollableRegion } from '../../components/ScrollableRegion/ScrollableRegion'
 import { compare, emptyStates } from '../../copy'
 import { api } from '../../lib/api'
 import type { CatalogItem } from '../../lib/types'
@@ -70,7 +71,7 @@ export function Compare() {
         <p className={styles.subtitle}>{compare.body}</p>
       </div>
 
-      <div className={styles.tableScroll}>
+      <ScrollableRegion outerClassName={styles.tableScrollOuter} scrollClassName={styles.tableScroll} ariaLabel="comparison table">
         <div
           className={styles.table}
           style={{
@@ -103,7 +104,7 @@ export function Compare() {
             </div>
           ))}
         </div>
-      </div>
+      </ScrollableRegion>
     </div>
   )
 }

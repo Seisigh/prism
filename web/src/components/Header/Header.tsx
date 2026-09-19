@@ -1,10 +1,12 @@
 import { Heart, MapPin, ShoppingCart, SlidersHorizontal, User } from 'lucide-react'
-import { useEffect, useState } from 'react'
-import { NavLink, Link } from 'react-router-dom'
+import { useEffect, useRef, useState } from 'react'
+import { NavLink, Link, useLocation } from 'react-router-dom'
 import { api } from '../../lib/api'
 import { usePrismSDK } from '../../state/PrismSDKContext'
 import { useCart } from '../../state/CartContext'
 import { useWishlist } from '../../state/WishlistContext'
+import { useScrollAffordance } from '../../hooks/useScrollAffordance'
+import { ScrollArrows } from '../ScrollArrows/ScrollArrows'
 import { SearchBar } from '../SearchBar/SearchBar'
 import styles from './Header.module.css'
 
@@ -13,6 +15,12 @@ export function Header({ onOpenProfile }: { onOpenProfile: () => void }) {
   const { count } = useCart()
   const { ids: wishlistIds } = useWishlist()
   const sdk = usePrismSDK()
+  const location = useLocation()
+
+  const navLinkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map())
+  const { ref: navStripRef, canScrollLeft, canScrollRight, scrollByArrow } = useScrollAffordance<HTMLElement>([
+    categories,
+  ])
 
   useEffect(() => {
     api
@@ -20,6 +28,19 @@ export function Header({ onOpenProfile }: { onOpenProfile: () => void }) {
       .then((r) => setCategories(r.categories))
       .catch(() => setCategories([]))
   }, [])
+
+  // The active category (current route) stays reachable on load -- scroll
+  // it into view if the strip opens already scrolled past it. Only ever
+  // runs once categories exist and the strip has a real scrollWidth to
+  // scroll within (guards against firing on an empty/unmeasured strip).
+  useEffect(() => {
+    if (categories.length === 0) return
+    const activeCategory = categories.find((c) => location.pathname === `/category/${encodeURIComponent(c)}`)
+    if (!activeCategory) return
+    const el = navLinkRefs.current.get(activeCategory)
+    el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categories])
 
   return (
     <header className={styles.header}>
@@ -70,11 +91,27 @@ export function Header({ onOpenProfile }: { onOpenProfile: () => void }) {
         </nav>
       </div>
 
-      <div className={styles.navStripOuter}>
-        <nav className={styles.navStrip} aria-label="Categories">
+      <div className={styles.navStripOuter} data-scroll-left={canScrollLeft} data-scroll-right={canScrollRight}>
+        <ScrollArrows
+          canScrollLeft={canScrollLeft}
+          canScrollRight={canScrollRight}
+          onScrollLeft={() => scrollByArrow(-1)}
+          onScrollRight={() => scrollByArrow(1)}
+          ariaLabelPrefix="Scroll categories"
+        />
+        <nav
+          ref={navStripRef}
+          className={styles.navStrip}
+          aria-label="Categories"
+          tabIndex={0}
+        >
           {categories.map((c) => (
             <NavLink
               key={c}
+              ref={(el) => {
+                if (el) navLinkRefs.current.set(c, el)
+                else navLinkRefs.current.delete(c)
+              }}
               to={`/category/${encodeURIComponent(c)}`}
               className={({ isActive }) => [styles.navLink, isActive ? styles.active : ''].join(' ')}
               onClick={() => sdk?.trackCategoryNavClick()}

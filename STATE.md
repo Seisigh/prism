@@ -2312,3 +2312,129 @@ pattern classes (`only-export-components` for a context+hook pair,
 `set-state-in-effect` for a fetch-on-mount effect) already present
 throughout this codebase, not new categories, `import-linter` contract
 holds.
+
+## Category nav strip: the third clipping bug, an audit, and one shared fix pattern
+
+The category nav strip clipped at the right edge with no way to reach
+categories past it ("Outdoor & Gar..." cut off, everything after it
+unreachable). Fixed as a scrollable strip, not by wrapping: hidden-but-
+functional scrollbar (`overflow-x: auto` + `scrollbar-width: none`),
+vertical-wheel-redirected to horizontal, conditional arrows and a fade
+mask (only on the edge with real content, via `data-scroll-left`/
+`data-scroll-right` driven by actual `scrollLeft`/`scrollWidth`), full
+keyboard support, and the active category scrolled into view on load.
+
+**A real bug found live while building it:** the wheel-redirect was
+first written as a JSX `onWheel` prop. React attaches `onWheel` as a
+passive listener by default (React 17+), so `preventDefault()` inside
+it is silently a no-op — confirmed via a real `WheelEvent` dispatch in
+Playwright, which surfaced `"Unable to preventDefault inside passive
+event listener invocation"` in the console. The page would have kept
+scrolling vertically underneath the redirected horizontal scroll for
+every real user. Fixed with a native `addEventListener('wheel', ...,
+{ passive: false })` in a `useEffect`, which is the only way to make
+`preventDefault()` real here.
+
+**The audit, asked for before any further fix:** searched the codebase
+for the same defect class — `overflow: hidden` on anything whose
+children can exceed it, and `overflow-x: auto` with no visual
+indication. 18 `overflow: hidden` and 8 `overflow-x`/`-y: auto`
+declarations, all individually checked. Verdict: not systemic. One real
+unfixed instance of the same shape as the nav strip (`AdminLayout`'s
+mobile nav, `overflow-x: auto` with a plain native scrollbar, no
+arrows/fade/wheel-redirect — not yet visibly broken at 4 nav items, but
+about to grow to 6 once the two vector-space admin views land), three
+milder instances (`admin-shared.module.css` and `Compare.module.css`'s
+`.tableScroll`, and `SessionViewer.module.css`'s `.scrollBody` — all
+reachable already, just with no visual cue that there's more to scroll
+to), and everything else confirmed safe: `-webkit-line-clamp` text
+truncation, decorative fills, image-crop containers, rounded-corner-
+only wrappers with the real scroll isolated in a nested element, and
+`SearchBar.module.css`'s `.dropdown` (bounded only by the backend's
+`autocomplete(limit=8)` default, with nothing in the CSS linking back
+to it — fragile, not broken).
+
+**Fixed as one shared pattern, not four bespoke ones:** extracted the
+nav strip's logic into `web/src/hooks/useScrollAffordance.ts` (scroll-
+position tracking, the wheel-redirect listener, an arrow-click
+handler) and `web/src/components/ScrollArrows` (the arrow-button pair)
+plus `web/src/styles/scrollFade.module.css` (a `composes`-able
+`.fadeOuter` class, its gradient color and width overridable per site
+via `--scroll-fade-bg`/`--scroll-fade-width` custom properties, since
+different containers sit on different backgrounds — white panels,
+`--surface-alt` page background, the dark admin topbar). A further
+`web/src/components/ScrollableRegion` wraps the hook + arrows + fade
+for the common "wide table in a div" shape, used by all four table
+sites.
+
+**A second real bug found live while applying this to the tables:** the
+arrow button is `position: absolute; top: 0; bottom: 0`, sized to its
+positioned ancestor. For the nav strip that ancestor is one row tall,
+so this is correct. For a table wrapped in `ScrollableRegion`, nothing
+constrains that ancestor's height — it's exactly the table's own
+height, since the whole table scrolls with the page, not internally.
+On the sessions table (98 rows) this made the arrow button ~3,864px
+tall, `display: grid; place-items: center`-ing its chevron icon at the
+vertical midpoint of the *entire table*, nowhere near whatever slice of
+it the viewport was actually showing — found by checking the arrow's
+own `getBoundingClientRect()` at 768px after it didn't show up in a
+screenshot. Fade doesn't have this problem (it's correct at every
+scroll position along the table's height, not a single fixed click
+target), so `ScrollableRegion`'s `arrows` prop now defaults to `false`;
+arrows stay opt-in, only exercised by `Header` and `AdminLayout`'s own
+direct `useScrollAffordance` + `ScrollArrows` wiring, where the
+container is genuinely short and fixed-height. `SessionViewer`'s two
+regions also pass `wheelRedirect={false}`, since `.scrollBody` is
+independently, primarily vertically scrollable (`max-height: 80vh;
+overflow-y: auto`) — redirecting its wheel input horizontally would
+have hijacked the scroll a viewer actually wants there.
+
+Applied to: `AdminLayout`'s mobile nav (arrows + fade, verified at
+380px — narrower than the 768/900px breakpoint check, since 4 nav
+items don't overflow until well under 768px), `admin-shared.module.css`
+`.tableScroll` (used by `LiveView`, `SessionDetail`, `SessionsList` —
+fade only), `Compare.module.css` `.tableScroll` (fade only), and
+`SessionViewer.module.css` `.scrollBody` (fade only, no wheel-redirect,
+both the raw-events and recomputed-views panels). `SearchBar.module.css`
+`.dropdown` got a `max-height: 360px` + `overflow-y: auto` so it's no
+longer coupled to a backend default it can't see.
+
+**Tooltip component, replacing every `title=` that described a signal
+or a column** (not the ones that were something else — `SessionViewer`'s
+per-row "inside this view" hint and the histogram bars' value-count
+hints stay native `title`, since they're not signal/column
+descriptions): `web/src/components/Tooltip`, a single-child wrapper
+that renders through a portal to `document.body` (so no clipping
+container it might sit inside — the same containers this audit just
+covered — can cut it off), positioned from `getBoundingClientRect()`
+with viewport-edge collision handling (flips above when there's no
+room below, clamps horizontally when there's no room right). 200ms
+show delay, instant hide, Escape dismisses, shows on focus as well as
+hover with `aria-describedby` wired to the bubble, tap-to-toggle on
+touch (guarded by a `touchstart`-set flag so hover/focus handlers don't
+also fire). Trigger scope is the signal name or column header text
+only, never the whole card/cell — verified live that a raw/normalized
+value can still be selected and copied with a tooltip open elsewhere on
+the same card. Applied to `SessionDetail`'s column headers and signal-
+card names (the description itself upgraded from a flattened
+`\n`-joined string to structured Measures/Higher/Lower/Unavailable-when
+markup) and `SignalDistributions`' signal list.
+
+Verified live via Playwright at 1440 and 768: both scroll directions
+and both end states on the sessions table (confirmed the fade flips
+`data-scroll-left`/`data-scroll-right` correctly, and that the
+previously-unreachable "Live →" link is reachable again), the
+`AdminLayout` nav at 380px (arrow appears/disappears correctly, scrolls
+on click), a tooltip near the viewport's right edge (clamped, doesn't
+overflow) and near the bottom edge at a squeezed 400px-tall viewport
+(flips above), Escape dismissal, and the touch tap-to-toggle path (via
+synthetic `touchstart` + `click` dispatch — first tap shows, second
+tap hides). `Compare`'s table got the identical wiring by code
+inspection and passing typecheck/lint, but wasn't live-verified (no
+compare set was readily on hand in this session).
+
+`tsc -b` (the actual build command — `tsc --noEmit` alone missed a
+class of event-handler generic-parameter errors this surfaced, since
+it resolves a different tsconfig) and `npm run build` both clean,
+oxlint shows no new warnings beyond the pre-existing accepted classes,
+all 270 backend tests still pass (nothing backend-side touched).

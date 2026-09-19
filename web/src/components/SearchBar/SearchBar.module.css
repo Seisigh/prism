@@ -87,7 +87,15 @@
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-2);
   z-index: var(--z-dropdown);
-  overflow: hidden;
+  /* Was bounded only by the backend's autocomplete(limit=8) default,
+     with nothing in this file linking back to it -- a real max-height
+     costs nothing and means this stays safe even if that default ever
+     changes without this file being touched. overflow-y: auto (not
+     hidden) so it degrades to a scrollable list rather than clipping if
+     it ever does. */
+  max-height: 360px;
+  overflow-y: auto;
+  overflow-x: hidden;
   padding: var(--sp-1);
 }
 

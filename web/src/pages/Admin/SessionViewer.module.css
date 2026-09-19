@@ -61,9 +61,29 @@
   justify-content: space-between;
 }
 
+/* This panel has no background of its own (see `.panel` above), so it
+   shows the page's --surface-alt through -- the fade has to match that,
+   not the white --surface default. No arrows and no wheel-redirect here
+   (see SessionViewer.tsx's ScrollableRegion props): this element's
+   primary scroll axis is vertical, independent of the page, so an arrow
+   pair would collide with its own native vertical scrollbar and
+   redirecting the wheel would hijack the scroll a viewer actually
+   wants. Fade alone still tells a viewer a row runs wider than the
+   panel. */
+.scrollBodyOuter {
+  composes: fadeOuter from '../../styles/scrollFade.module.css';
+  --scroll-fade-bg: var(--surface-alt);
+}
+
 .scrollBody {
   max-height: 80vh;
   overflow-y: auto;
+  overflow-x: auto;
+}
+
+.scrollBody:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .table {

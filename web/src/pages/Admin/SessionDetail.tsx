@@ -3,6 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { api } from '../../lib/api'
 import type { CatalogItem } from '../../lib/types'
 import { ProductImage } from '../../components/ProductImage/ProductImage'
+import { ScrollableRegion } from '../../components/ScrollableRegion/ScrollableRegion'
+import { Tooltip } from '../../components/Tooltip/Tooltip'
+import tooltipStyles from '../../components/Tooltip/Tooltip.module.css'
 import shared from './admin-shared.module.css'
 import styles from './SessionDetail.module.css'
 
@@ -60,9 +63,25 @@ function fmt(n: number | null): string {
   return Number.isInteger(n) ? String(n) : n.toFixed(3)
 }
 
-function signalTooltip(name: string, desc: SignalDescription | undefined): string {
+function signalTooltip(name: string, desc: SignalDescription | undefined) {
   if (!desc) return name
-  return `${name}\n\nMeasures: ${desc.measures}\n\nHigher: ${desc.higher}\n\nLower: ${desc.lower}\n\nUnavailable when: ${desc.unavailable_when}`
+  return (
+    <>
+      <div className={tooltipStyles.heading}>{name}</div>
+      <div className={tooltipStyles.row}>
+        <b>Measures</b> {desc.measures}
+      </div>
+      <div className={tooltipStyles.row}>
+        <b>Higher</b> {desc.higher}
+      </div>
+      <div className={tooltipStyles.row}>
+        <b>Lower</b> {desc.lower}
+      </div>
+      <div className={tooltipStyles.row}>
+        <b>Unavailable when</b> {desc.unavailable_when}
+      </div>
+    </>
+  )
 }
 
 function compareRows(a: SignalRow, b: SignalRow, key: SortKey): number {
@@ -164,7 +183,7 @@ export function SessionDetail() {
         ) : rows.length === 0 ? (
           <div className={shared.empty}>No qualifying views in this session yet.</div>
         ) : (
-          <div className={shared.tableScroll}>
+          <ScrollableRegion outerClassName={shared.tableScrollOuter} scrollClassName={shared.tableScroll} ariaLabel="item views">
           <table className={shared.table}>
             <thead>
               <tr>
@@ -172,7 +191,6 @@ export function SessionDetail() {
                   <th
                     key={col.key}
                     className={styles.sortableHeader}
-                    title={COLUMN_HELP[col.key]}
                     onClick={() => toggleSort(col.key)}
                     role="button"
                     tabIndex={0}
@@ -184,7 +202,11 @@ export function SessionDetail() {
                       }
                     }}
                   >
-                    {col.label}
+                    <Tooltip content={COLUMN_HELP[col.key]}>
+                      <span className={tooltipStyles.trigger} tabIndex={0}>
+                        {col.label}
+                      </span>
+                    </Tooltip>
                     <span className={styles.sortIndicator}>
                       {sortKey === col.key ? (sortDir === 'asc' ? ' ▲' : ' ▼') : ''}
                     </span>
@@ -240,10 +262,14 @@ export function SessionDetail() {
                           {Object.entries(row.signals)
                             .sort(([a], [b]) => a.localeCompare(b))
                             .map(([name, v]) => (
-                              <div key={name} className={styles.signalCard} title={signalTooltip(name, registry[name])}>
+                              <div key={name} className={styles.signalCard}>
                                 <div className={styles.signalName}>
                                   <span className={[shared.availDot, v.available ? shared.availYes : shared.availNo].join(' ')} />
-                                  {name}
+                                  <Tooltip content={signalTooltip(name, registry[name])}>
+                                    <span className={tooltipStyles.trigger} tabIndex={0}>
+                                      {name}
+                                    </span>
+                                  </Tooltip>
                                 </div>
                                 {v.available ? (
                                   <div className={styles.signalValues}>
@@ -267,7 +293,7 @@ export function SessionDetail() {
               ))}
             </tbody>
           </table>
-          </div>
+          </ScrollableRegion>
         )}
       </div>
     </div>

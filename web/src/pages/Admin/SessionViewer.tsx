@@ -1,4 +1,5 @@
 import { useMemo, useState, type CSSProperties } from 'react'
+import { ScrollableRegion } from '../../components/ScrollableRegion/ScrollableRegion'
 import shared from './admin-shared.module.css'
 import styles from './SessionViewer.module.css'
 
@@ -155,7 +156,13 @@ export function SessionViewer() {
                 </button>
               ))}
             </div>
-            <div className={styles.scrollBody}>
+            <ScrollableRegion
+              outerClassName={styles.scrollBodyOuter}
+              scrollClassName={styles.scrollBody}
+              ariaLabel="raw events"
+              arrows={false}
+              wheelRedirect={false}
+            >
               {!filteredEvents || filteredEvents.length === 0 ? (
                 <div className={styles.empty}>No events match this filter.</div>
               ) : (
@@ -198,7 +205,7 @@ export function SessionViewer() {
                   </tbody>
                 </table>
               )}
-            </div>
+            </ScrollableRegion>
           </div>
 
           <div className={styles.panel}>
@@ -206,7 +213,13 @@ export function SessionViewer() {
               <span>Recomputed canonical views</span>
               <span>{views?.length ?? 0}</span>
             </div>
-            <div className={styles.scrollBody}>
+            <ScrollableRegion
+              outerClassName={styles.scrollBodyOuter}
+              scrollClassName={styles.scrollBody}
+              ariaLabel="recomputed canonical views"
+              arrows={false}
+              wheelRedirect={false}
+            >
               {!views || views.length === 0 ? (
                 <div className={styles.empty}>
                   No canonical views recomputed (no qualifying 300ms+ exposure in this log).
@@ -241,7 +254,7 @@ export function SessionViewer() {
                   </tbody>
                 </table>
               )}
-            </div>
+            </ScrollableRegion>
           </div>
         </div>
       ) : null}

@@ -1,0 +1,45 @@
+/* position: fixed, not absolute -- Tooltip.tsx positions this straight
+   from getBoundingClientRect(), which is already viewport-relative, and
+   it's rendered through a portal to document.body so no ancestor's
+   overflow: hidden / overflow-x: auto (see the scroll-affordance audit)
+   can clip it regardless of where its trigger lives. */
+.tooltip {
+  position: fixed;
+  z-index: 9000;
+  max-width: 280px;
+  background: var(--ink);
+  color: var(--surface);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-2);
+  padding: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-12);
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.heading {
+  font-weight: 600;
+  margin-bottom: var(--sp-1);
+}
+
+.row {
+  margin-top: var(--sp-1);
+}
+
+.row b {
+  color: rgba(255, 255, 255, 0.68);
+  font-weight: 600;
+}
+
+/* For the trigger elements themselves (the wrapped span/button), not
+   the floating bubble above. */
+.trigger {
+  cursor: help;
+}
+
+.trigger:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+

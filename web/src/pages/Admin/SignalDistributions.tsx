@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Tooltip } from '../../components/Tooltip/Tooltip'
 import shared from './admin-shared.module.css'
 import styles from './SignalDistributions.module.css'
 
@@ -89,14 +90,14 @@ export function SignalDistributions() {
         <div className={styles.layout}>
           <div className={styles.signalList}>
             {signalNames.map((name) => (
-              <button
-                key={name}
-                className={[styles.signalItem, selected === name ? styles.active : ''].join(' ')}
-                onClick={() => setSelected(name)}
-                title={registry[name]?.measures ?? name}
-              >
-                {name}
-              </button>
+              <Tooltip key={name} content={registry[name]?.measures ?? name}>
+                <button
+                  className={[styles.signalItem, selected === name ? styles.active : ''].join(' ')}
+                  onClick={() => setSelected(name)}
+                >
+                  {name}
+                </button>
+              </Tooltip>
             ))}
           </div>
 

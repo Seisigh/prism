@@ -1,5 +1,7 @@
-import { useState, type FormEvent, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+import { useScrollAffordance } from '../../hooks/useScrollAffordance'
+import { ScrollArrows } from '../../components/ScrollArrows/ScrollArrows'
 import styles from './AdminLayout.module.css'
 
 /**
@@ -64,6 +66,19 @@ const NAV_ITEMS = [
 
 export function AdminLayout({ children, onLogout }: { children: ReactNode; onLogout: () => void }) {
   const [creatingProfile, setCreatingProfile] = useState(false)
+  const location = useLocation()
+  const navLinkRefs = useRef<Map<string, HTMLAnchorElement>>(new Map())
+  const { ref: navRef, canScrollLeft, canScrollRight, scrollByArrow } = useScrollAffordance<HTMLElement>()
+
+  // Same reachability guarantee as the storefront category strip: the
+  // active admin section stays visible on load even if the mobile nav
+  // opens already scrolled past it.
+  useEffect(() => {
+    const activeItem = NAV_ITEMS.find((item) => location.pathname === item.to)
+    if (!activeItem) return
+    const el = navLinkRefs.current.get(activeItem.to)
+    el?.scrollIntoView({ block: 'nearest', inline: 'center' })
+  }, [location.pathname])
 
   async function newProfile() {
     setCreatingProfile(true)
@@ -86,13 +101,30 @@ export function AdminLayout({ children, onLogout }: { children: ReactNode; onLog
     <div className={styles.shell}>
       <div className={styles.topbar}>
         <span className={styles.brand}>PRISM ADMIN</span>
-        <nav className={styles.nav}>
-          {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} className={({ isActive }) => [styles.navLink, isActive ? styles.active : ''].join(' ')}>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
+        <div className={styles.navOuter} data-scroll-left={canScrollLeft} data-scroll-right={canScrollRight}>
+          <ScrollArrows
+            canScrollLeft={canScrollLeft}
+            canScrollRight={canScrollRight}
+            onScrollLeft={() => scrollByArrow(-1)}
+            onScrollRight={() => scrollByArrow(1)}
+            ariaLabelPrefix="Scroll admin nav"
+          />
+          <nav ref={navRef} className={styles.nav} tabIndex={0}>
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                ref={(el) => {
+                  if (el) navLinkRefs.current.set(item.to, el)
+                  else navLinkRefs.current.delete(item.to)
+                }}
+                to={item.to}
+                className={({ isActive }) => [styles.navLink, isActive ? styles.active : ''].join(' ')}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
         <div className={styles.actions}>
           <button className={styles.newProfileBtn} onClick={newProfile} disabled={creatingProfile}>
             {creatingProfile ? 'Opening...' : '+ New profile'}

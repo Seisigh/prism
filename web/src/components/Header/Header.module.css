@@ -94,20 +94,9 @@
 }
 
 .navStripOuter {
-  position: relative;
+  composes: fadeOuter from '../../styles/scrollFade.module.css';
   max-width: var(--content-max);
   margin: 0 auto;
-}
-
-.navStripOuter::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 48px;
-  background: linear-gradient(to right, transparent, var(--surface));
-  pointer-events: none;
 }
 
 .navStrip {
@@ -116,6 +105,11 @@
   gap: var(--sp-1);
   overflow-x: auto;
   scrollbar-width: none;
+}
+
+.navStrip:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
 }
 
 .navStrip::-webkit-scrollbar {

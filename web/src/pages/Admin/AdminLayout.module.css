@@ -23,10 +23,25 @@
   white-space: nowrap;
 }
 
+.navOuter {
+  composes: fadeOuter from '../../styles/scrollFade.module.css';
+  --scroll-fade-bg: var(--ink);
+  --scroll-arrow-bg: var(--ink);
+  --scroll-arrow-color: rgba(255, 255, 255, 0.68);
+  --scroll-arrow-hover-color: var(--surface);
+  flex: 1;
+  min-width: 0;
+}
+
 .nav {
   display: flex;
   gap: var(--sp-1);
-  flex: 1;
+  width: 100%;
+}
+
+.nav:focus-visible {
+  outline: 2px solid var(--surface);
+  outline-offset: -2px;
 }
 
 .navLink {
@@ -162,8 +177,8 @@
     height: auto;
     padding: var(--sp-3) var(--sp-4);
   }
-  .nav {
-    /* `.nav` above is `flex: 1` (flex-basis: 0%), which wins over a
+  .navOuter {
+    /* `.navOuter` above is `flex: 1` (flex-basis: 0%), which wins over a
        plain `width: 100%` for main-axis sizing in a flex row -- that
        made this rule a no-op and left nav squeezed onto the same line
        as brand+actions, after them, instead of wrapping to its own row
@@ -171,7 +186,14 @@
        wrap. */
     order: 3;
     flex: 1 1 100%;
+  }
+  .nav {
     overflow-x: auto;
+    scrollbar-width: none;
+    padding: 0 var(--sp-8);
     padding-bottom: var(--sp-1);
+  }
+  .nav::-webkit-scrollbar {
+    display: none;
   }
 }

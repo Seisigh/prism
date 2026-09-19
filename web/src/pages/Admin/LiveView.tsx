@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
+import { ScrollableRegion } from '../../components/ScrollableRegion/ScrollableRegion'
 import shared from './admin-shared.module.css'
 import styles from './LiveView.module.css'
 
@@ -135,32 +136,32 @@ export function LiveView() {
             {displayedEvents.length === 0 ? (
               <div className={shared.empty}>Waiting for events — this session must be actively browsing.</div>
             ) : (
-              <div className={shared.tableScroll}>
-              <table className={shared.table}>
-                <thead>
-                  <tr>
-                    <th>t (ms)</th>
-                    <th>surface</th>
-                    <th>mode</th>
-                    <th>type</th>
-                    <th>payload</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {displayedEvents.map((e) => (
-                    <tr key={e.event_id}>
-                      <td>{e.ts_mono.toFixed(0)}</td>
-                      <td>{e.surface}</td>
-                      <td>
-                        {e.mode ? <span className={[shared.modeTag, shared[`mode-${e.mode}`]].join(' ')}>{e.mode}</span> : '—'}
-                      </td>
-                      <td>{e.type}</td>
-                      <td className={[shared.mono, styles.payload].join(' ')}>{JSON.stringify(e.payload)}</td>
+              <ScrollableRegion outerClassName={shared.tableScrollOuter} scrollClassName={shared.tableScroll} ariaLabel="event stream">
+                <table className={shared.table}>
+                  <thead>
+                    <tr>
+                      <th>t (ms)</th>
+                      <th>surface</th>
+                      <th>mode</th>
+                      <th>type</th>
+                      <th>payload</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-              </div>
+                  </thead>
+                  <tbody>
+                    {displayedEvents.map((e) => (
+                      <tr key={e.event_id}>
+                        <td>{e.ts_mono.toFixed(0)}</td>
+                        <td>{e.surface}</td>
+                        <td>
+                          {e.mode ? <span className={[shared.modeTag, shared[`mode-${e.mode}`]].join(' ')}>{e.mode}</span> : '—'}
+                        </td>
+                        <td>{e.type}</td>
+                        <td className={[shared.mono, styles.payload].join(' ')}>{JSON.stringify(e.payload)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </ScrollableRegion>
             )}
           </div>
         </div>

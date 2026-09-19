@@ -1,0 +1,33 @@
+/* Shared with useScrollAffordance + ScrollArrows: `compose`s onto the
+   non-scrolling wrapper around a horizontally-scrollable element (never
+   onto the scrolling element itself -- fade and arrows need to stay put
+   while the content under them scrolls). Fade masks are gated on
+   data-scroll-left/right, set from the scroll state the hook tracks, so
+   they only ever show on the edge that actually has more content.
+   --scroll-fade-bg defaults to the light surface color; a container on
+   a different background (the dark admin topbar, a page's sunken body
+   color) overrides it so the gradient fades to the right color. */
+.fadeOuter {
+  position: relative;
+}
+
+.fadeOuter[data-scroll-left='true']::before,
+.fadeOuter[data-scroll-right='true']::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: var(--scroll-fade-width, 48px);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.fadeOuter[data-scroll-left='true']::before {
+  left: 0;
+  background: linear-gradient(to left, transparent, var(--scroll-fade-bg, var(--surface)));
+}
+
+.fadeOuter[data-scroll-right='true']::after {
+  right: 0;
+  background: linear-gradient(to right, transparent, var(--scroll-fade-bg, var(--surface)));
+}

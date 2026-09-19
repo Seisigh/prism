@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { ScrollableRegion } from '../../components/ScrollableRegion/ScrollableRegion'
 import shared from './admin-shared.module.css'
 import styles from './SessionsList.module.css'
 
@@ -104,7 +105,7 @@ export function SessionsList() {
         ) : sessions.length === 0 ? (
           <div className={shared.empty}>No sessions match these filters.</div>
         ) : (
-          <div className={shared.tableScroll}>
+          <ScrollableRegion outerClassName={shared.tableScrollOuter} scrollClassName={shared.tableScroll} ariaLabel="sessions">
           <table className={shared.table}>
             <thead>
               <tr>
@@ -173,7 +174,7 @@ export function SessionsList() {
               ))}
             </tbody>
           </table>
-          </div>
+          </ScrollableRegion>
         )}
       </div>
     </div>
