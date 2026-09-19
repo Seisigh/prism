@@ -1630,8 +1630,21 @@ concurrency, not just in the single-session case that first caught it.
 
 ## Deployment
 
-**Prepared and locally verified twice over. Deferred pending a hosting
-decision — not blocked on a bug.** `flyctl` is authenticated as the
+**Decision made, not just deferred: not deploying for now, by choice,
+not blocked on anything.** Superseding the "pending a hosting decision"
+framing below — the author's reasoning: a free-tier host's 30-50s cold
+start reads as *broken*, not as *undeployed*, which is a worse first
+impression than no live link at all. A recorded 60-90s screen capture in
+`README.md` replaces the live URL for now. Fly.io stays a documented
+option for later — `Dockerfile` and `fly.toml` stay in the repo,
+verified working, ready to run the moment the author decides to revisit
+this. The billing blocker recorded below is still real background (it's
+what originally prompted "defer for now") but is no longer the operative
+reason — even with billing resolved, the recorded walkthrough is now the
+plan, not an interim stand-in for a live site.
+
+**Prepared and locally verified twice over — the original record, kept
+for context.** `flyctl` is authenticated as the
 author's own account (`alvinw.seisigh@gmail.com`); that auth blocker
 from earlier in the build is resolved. `flyctl apps create
 prism-storefront` was retried this session and still fails with: *"We
@@ -1644,13 +1657,13 @@ agent's, per the standing rule against handling financial credentials.
 Given the choice to add a card now or defer, the author chose to defer
 and keep building — this is a hosting decision still open, not a
 blocker the agent hit and stopped on. Everything below is ready to run
-the moment that decision is made.
+whenever the author decides to revisit deployment.
 
 - `Dockerfile` — multi-stage: builds `sdk/` + `web/` (Node), then a Python stage that installs the backend, bakes the real catalog in at image-build time (`RUN python -m catalog.build` — needs network access during `docker build`), **now also bakes the trained per-mode ranker + calibrator artifacts in the same way** (`RUN python -m server.models.train_ranker`, ~50s in-container — needs the catalog built first, since `sim/embedding.py` reads it), and serves both the API and the built frontend from one `uvicorn` process. Needed `libgomp1` added to the apt-get line — LightGBM's shared library requires the OpenMP runtime, which the slim base image doesn't include by default; the build failed with `OSError: libgomp.so.1: cannot open shared object file` before this was added, a real, now-fixed bug in this build's own Dockerfile change, not a pre-existing issue.
 - **Verified locally, this session**: built the image from a clean cache (confirming both the new `libgomp1` fix and the ranker-training step complete successfully — 748/750 context items resolved, 2 dropped to a transient ABO S3 SSL error, within the pipeline's already-tolerated drop-rate), ran the container against the existing docker-compose Postgres/Redis, confirmed `/api/health` returns 200 immediately on a cold container start (meaning the baked-in ranker artifacts load correctly at process startup, not just at build time).
 - `fly.toml` — app config, `shared-cpu-1x` / 512MB, `auto_stop_machines` so it doesn't run (or cost) anything while idle.
 
-### What the author needs to do (the agent cannot do this part)
+### If the author revisits deployment later (not current — kept for reference)
 
 Add a credit card at the URL flyctl gave above, then either ask the
 agent to continue (the remaining steps are all things the agent *can*
@@ -1664,13 +1677,12 @@ flyctl secrets set DATABASE_URL=... REDIS_URL=...
 flyctl deploy
 ```
 
-Once that's done, the repo can flip from private to public per the
-kickoff instructions' condition ("stays private until the synthetic-
-content labeling, the consent gate, and noindex are all in place" — all
-three are already true; deploying doesn't change that gate, it's just
-the last item still open). The instruction was to keep it deployed from
-here rather than only at the end — noted so this isn't treated as a
-one-time task once billing unblocks it.
+Going public never actually depended on this: the kickoff instructions'
+condition was "stays private until the synthetic-content labeling, the
+consent gate, and noindex are all in place" — all three were already
+true independent of deployment, confirmed directly by the close-out
+pass's pre-public audit. Deployment was never the gate on going public;
+it's an optional future step now, not an open item blocking anything.
 
 ---
 

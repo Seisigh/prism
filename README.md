@@ -45,11 +45,14 @@ could silently drop a session's update under a specific, common
 ordering condition — see
 ["Live scoring, the admin console, and the load test"](#live-scoring-the-admin-console-and-the-load-test)
 below for both, and the real p95 latency number now that there's a
-scoring path to measure. Deployment is prepared (`Dockerfile`,
-`fly.toml`) but deliberately deferred pending a hosting decision, not
-blocked on a bug — see `STATE.md`. 235 tests, all green. That's the
-honest state of the project as of this commit; `STATE.md` is kept up
-to date as the build continues.
+scoring path to measure. There's no live URL here by choice, not by
+blocker: `Dockerfile` and `fly.toml` are built and verified, but a
+free-tier host's 30-50s cold start reads as *broken* rather than
+*undeployed*, which is worse than no link at all — a recorded
+walkthrough is planned to stand in instead, and Fly stays a documented
+option for later. See `STATE.md`. 270 tests, all green. That's the
+honest state of the project as of this commit; `STATE.md` is kept up to
+date as the build continues.
 
 ## The bar was wrong, a negative control that couldn't fail, and what replaced both
 
