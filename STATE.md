@@ -1922,3 +1922,77 @@ needed).
 **No longer an open item — the last pre-public code blocker is closed.**
 What remains is entirely outside code: Fly.io billing (deployment) and
 the Gate 0 manual walkthrough (the author's own step).
+
+---
+
+## Next, gated: two new admin console views — NOT STARTED, blocked on two preconditions
+
+Full spec given by the author, recorded here rather than implemented,
+because the author's own instruction is explicit: **build only after
+deployment is live and the Gate 0 manual walkthrough is done.** Neither
+is true as of this entry — deployment is still blocked on Fly.io billing
+(see "Deployment" above), and "Gate 0's manual check: still outstanding"
+above still has no record of the walkthrough having happened. Checked
+both directly before writing this, not assumed. **Time-boxed to one day
+once started; if it runs long, ship View A's 2D map and drop View B**
+(the author's own fallback instruction).
+
+### View A — Item space map
+
+PCA fit once offline over item embeddings, three components stored with
+the catalog (not t-SNE/UMAP — PCA is linear, so the taste vector
+projects through the same fitted transform and is genuinely comparable
+to item positions; a non-linear embedding can't place a new point
+without refitting, which would force faking the visitor's position as a
+centroid of nearby items). Show explained variance per component on the
+view. Default render is 2D (first two components) — this is the primary
+view and the one that goes in the README; a 2D/3D toggle adds a 3D
+render using all three components via plain three.js (orbit controls, a
+single `BufferGeometry` `Points` object for the 750 items — not a heavy
+3D framework), because 3D screenshots are unreadable as static images
+and 2D is what a cold reader actually sees.
+
+Draws: all 750 items colored by category; viewed items emphasized and
+sized by predicted interest; fast skips marked distinctly (repulsion is
+more interesting to show than only attraction, since a fast skip pushes
+the taste vector away); the taste vector itself as a marker with a trail
+of its path across the session; the current recommendation slate
+highlighted; hover for the item card. Live updates over the existing
+admin WebSocket — projecting the taste vector through a fitted PCA
+transform is two or three dot products, so this adds **no runtime
+dimensionality-reduction dependency**.
+
+### View B — Signal space, parallel coordinates
+
+Eighteen vertical axes, one per signal (the full registry —
+`signals.py`'s 8 + `signals_gate1.py`'s 6 + `signals_directional.py`'s
+2 + the 2 comparison-family signals, matching the count used throughout
+Gate 1/2's ablation work), each scaled to its own normalized range. One
+polyline per session across all eighteen axes. Select several sessions
+to overlay and compare, legend by archetype or session code. Brush an
+axis to filter. Author's framing, worth keeping verbatim: "this is the
+view that actually answers 'show me every profile and all its factors
+at once' — 3D shows three of eighteen, this shows all of them." Hand-
+rolled SVG, no d3 — eighteen axes and a few dozen polylines doesn't need
+a charting library.
+
+### Both views
+
+Spectrum palette from §6.0 (the one place §6.5 permits it outside the
+profile panel — these views decompose something into dimensions).
+Same standards as every other surface: §6.6 two-pass review at both
+1440/768 viewports, all five interaction states, real empty states,
+behind the admin auth just closed above (no exception — same
+`Depends(require_admin_session)` every other `/api/admin/*` route
+already uses).
+
+### What has to happen before starting
+
+1. Deployment live (author's action — Fly.io billing).
+2. Gate 0's manual walkthrough confirmed done (author's action).
+3. Only then: fit the offline PCA (needs a script + the fitted
+   components stored with the catalog — not built yet, nothing to build
+   it against yet since it wants real item embeddings already computed
+   by `sim/embedding.py`, which exists, but the PCA fit itself and its
+   storage format don't), then View A, then View B if time remains
+   within the one-day box.
