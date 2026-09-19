@@ -8,6 +8,7 @@ from typing import Literal
 Gender = Literal["womens", "mens", "unisex"]
 AgeBand = Literal["kids", "teen", "adult", "older_adult"]
 StockStatus = Literal["in_stock", "low_stock", "out_of_stock"]
+Season = Literal["spring", "summer", "fall", "winter", "holiday", "none"]
 DescriptionBand = Literal["short", "medium", "long"]
 CopyFraming = Literal["feature_led", "benefit_led"]
 BrandTier = Literal["value", "standard", "premium"]
@@ -57,6 +58,11 @@ class CatalogItem:
     badges: list[str]
     alt_text: str
     reviews: list[ReviewSnippet]
+    # Merchandising only (close-out item 4) -- which rail surfaces this
+    # item and whether it gets a seasonal badge. Never read by
+    # server/features/, sim/, or eval/ -- see catalog/synth_attributes.py's
+    # generate_season docstring.
+    season: Season
     # internal provenance, not served to the client but kept for pipeline debugging
     _source_item_id: str = ""
     _product_type: str = ""

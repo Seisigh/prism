@@ -59,6 +59,7 @@ const NAV_ITEMS = [
   { to: '/admin/sessions', label: 'Sessions' },
   { to: '/admin/event-log', label: 'Event log' },
   { to: '/admin/distributions', label: 'Signal distributions' },
+  { to: '/admin/season', label: 'Season' },
 ]
 
 export function AdminLayout({ children, onLogout }: { children: ReactNode; onLogout: () => void }) {

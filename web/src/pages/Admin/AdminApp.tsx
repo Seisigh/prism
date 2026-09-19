@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { AdminLayout, AdminLogin } from './AdminLayout'
 import { LiveView } from './LiveView'
+import { Season } from './Season'
 import { SessionDetail } from './SessionDetail'
 import { SessionViewer } from './SessionViewer'
 import { SessionsList } from './SessionsList'
@@ -38,6 +39,7 @@ export function AdminApp() {
         <Route path="session" element={<SessionViewer />} />
         <Route path="event-log" element={<SessionViewer />} />
         <Route path="distributions" element={<SignalDistributions />} />
+        <Route path="season" element={<Season />} />
       </Routes>
     </AdminLayout>
   )

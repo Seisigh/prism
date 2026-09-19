@@ -2138,3 +2138,165 @@ real, not spurious, reason. No code bug in `category_breadth` or
 generative-model property, the same category of decision this project
 has repeatedly reserved for the author (DDM priors, motor coupling) —
 flagging, not changing it here.
+
+---
+
+## Admin console legibility (item 2), catalog breadth research (item 3), and the seasonal variable (item 4)
+
+### Item 2: signal descriptions, tooltips, sortable columns, thumbnails, degenerate flagging
+
+`server/features/signal_descriptions.py` is the single source of truth:
+one `SignalDescription` (measures/higher/lower/unavailable_when) per
+registered signal, written by reading each signal function's own
+implementation, not guessed from its name. A new test
+(`tests/features/test_signal_descriptions.py`) asserts it's a perfect
+key-for-key match against the real 17-signal registry in both
+directions — a signal with no description, or a description for a
+signal that no longer exists, both fail the build. Served via a new
+auth-gated `GET /api/admin/signal-registry`.
+
+`SessionDetail.tsx`: every column header now has an explanatory
+`title`; clicking a header sorts by that column (numeric or string,
+`null` sorts first), clicking again reverses, with a visible ▲/▼
+indicator; every signal card in the expanded breakdown gets its full
+tooltip from the registry; the expanded row now shows the item's real
+thumbnail and title (fetched from the public `/api/items/{id}`, lazily,
+only for the expanded row) so it's identifiable without cross-
+referencing the id. `SignalDistributions.tsx`: the selected signal's
+full description renders above its strata, and each stratum is checked
+for two distinct kinds of degeneracy — availability under 10% ("mostly
+unavailable, not mostly a low value") and every available value falling
+in a single histogram bin (zero variance) — flagged with a red border
+and an explicit ⚠ reason rather than left for the reader to notice from
+the shape of a bar chart.
+
+**A real bug found live, not assumed away:** reviewing this in the
+browser, every signal card's tooltip showed only the bare signal name
+— `signalTooltip`'s fallback path, meaning `registry[name]` was
+`undefined` client-side despite `GET /api/admin/signal-registry`
+returning 200 every time. Traced past several false leads (StrictMode's
+expected double-fetch; a browser-extension content-script fetch
+intercept that turned out to be this session's own automation tooling,
+not the app) to the real cause: **the response carried no
+`Cache-Control` header, so the browser's HTTP cache served a stale
+response — captured once, during this same browser tab's earlier
+iterative testing, before the route consistently returned JSON — to
+every subsequent `fetch()` call, while a fresh navigation or `curl`
+bypassed that cache and got the live response.** Confirmed directly:
+`fetch(url, {cache: 'no-store'})` returned correct data immediately;
+the default cached `fetch(url)` kept returning stale HTML until the
+cache entry was forced to refresh. This is a real risk for any admin
+console screen showing data that changes (which is all of them), not
+specific to this one endpoint. Fixed with a new middleware in
+`server/main.py`, `admin_no_cache_header`, setting
+`Cache-Control: no-store` on every `/api/admin/*` response — scoped to
+`/api/admin/`, not site-wide, since the public storefront's own caching
+behavior is a separate, already-working concern. Two new tests
+(`test_admin_responses_are_never_cached`,
+`test_non_admin_responses_are_not_forced_no_store`) pin both halves.
+Verified live after the fix: a forced cache refresh plus a client-side
+remount showed the full tooltip correctly.
+
+**768px pass, stated honestly rather than silently skipped:** the
+browser automation tool's window-resize call did not change the actual
+rendered viewport in this environment for the entire admin-console
+review (confirmed repeatedly — requesting 768x900 consistently
+continued rendering at whatever the host display's own resolution was).
+1440px was reviewed live and thoroughly (the cache bug above was found
+this way). The 768px pass relies on structural confidence, not a visual
+check: every new element reuses CSS patterns already built and verified
+responsive during Gate 2's original admin console review (`.tableScroll`
+horizontal-scroll wrapper, `.panel`, CSS grid with `auto-fill`/`auto-fit`
++ `minmax()`, flexbox `flex-wrap`) rather than introducing new layout
+mechanisms. Flagged as a real gap in this pass's coverage, not claimed
+as done.
+
+### Item 3: catalog breadth — checked against real ABO data, not committed to
+
+Target categories checked directly against the real 23,231-candidate
+valid-US pool (`catalog.candidates.iter_candidates()`), not guessed at:
+
+| Target | Verdict | Real numbers |
+|---|---|---|
+| Toys and building sets | **Not available** | 4 candidates total (`TOY_SLIME`×2, `TOY_BUILDING_BLOCK`×1, `TOYS_AND_GAMES`×1) — already inside the existing, already-thin "Toys & Games" category (14 candidates) |
+| Video games | **Not available** | Only `VIDEO_GAME_ACCESSORIES` (7) exists — accessories, not games; no digital-goods equivalent exists in ABO at all, photographic or otherwise |
+| Household electronics / televisions | **Not available** as real devices | Zero `TELEVISION`/`TV`/`MONITOR`/`LAPTOP`/`TABLET`/`HEADPHONE`/`CAMERA` product types anywhere in the pool. What exists (`CELLULAR_PHONE_CASE` 77, `COMPUTER_ADD_ON` 68, `OFFICE_ELECTRONICS` 57, `PORTABLE_ELECTRONIC_DEVICE_COVER` 40, `ELECTRONIC_ADAPTER` 31, real standalone `SPEAKERS` 26) is already the existing "Electronics Accessories" category (391) — a new category here would just be a relabeling, not new breadth |
+| Clothing | **Not available** as garments | Zero `SHIRT`/`PANTS`/`JACKET`/`DRESS`/`APPAREL` types. "Shoes & Footwear" (2,089) is already the closest thing this dataset supports |
+| Cosmetics | **Already sourceable** — not new | The existing "Beauty & Personal Care" category (538: `BEAUTY` 254, skin cleaning/moisturizer, sunscreen, shampoo/conditioner) already covers this; no distinct color-cosmetics types (lipstick, foundation) exist by name, but this is not a gap worth a new category for |
+| Luxury goods | **Partially realizable, as curation, not sourcing** | No `LUXURY` product type exists (expected — it's a brand-tier concept). The existing "Jewelry & Accessories" (1,028: fine rings/earrings/necklaces/handbags) plus the already-built premium brand tier (`catalog/brands.py`) already supply the ingredients for a "luxury" merchandising treatment without any new ABO sourcing |
+| Pet supplies | **Already exists** | "Pet Supplies" (161) has been a mapped category since Gate 0 — not a gap |
+| Home decor | **Already folded into an existing category** | `HOME_FURNITURE_AND_DECOR` (647 candidates) is entirely already mapped into "Home & Furniture" — a separate "Home Decor" nav category would be a taxonomy split of existing inventory, not new breadth |
+
+**Bottom line:** all 148 product types present in the valid candidate
+pool are already mapped (`catalog/taxonomy.py`'s `PRODUCT_TYPE_MAP`) —
+there is no unmapped inventory sitting unused, and every target category
+checked is either already covered by an existing category or has
+effectively zero real inventory in ABO. This matches and sharpens
+`taxonomy.py`'s own standing note that ABO skews hard toward
+furniture/home/apparel(shoes)/grocery/beauty, all the way down to the
+product-type level, not just the vertical level documented in the
+original "ABO coverage reality" section. **No catalog code changed for
+this item** — the honest finding, per the author's own instruction not
+to pad with poor matches, is that there's nothing more to add without
+either fabricating product photography (explicitly ruled out) or
+relabeling inventory that's already in the catalog under a different
+category name.
+
+### Item 4: the seasonal variable — built
+
+`season` (`spring`/`summer`/`fall`/`winter`/`holiday`/`none`) is a real
+`CatalogItem` field, assigned deterministically per item
+(`catalog/synth_attributes.py::generate_season`) from a category-biased
+weight table (e.g. Lighting and Toys & Games lean holiday, Outdoor &
+Garden leans summer) with a 55% "not seasonal at all" baseline — most
+items aren't seasonal, matching how a real catalog would skew. Rebuilt
+catalog: 450 `none` / 96 summer / 77 holiday / 70 winter / 63 spring /
+54 fall across 810 items.
+
+The active season is a one-row Postgres table (`app_config`, a
+deliberately minimal single-key store, not a settings framework),
+readable publicly (`GET /api/season`, unauthenticated — the storefront
+needs this to badge items) and writable only from the admin console
+(`GET`/`POST /api/admin/season`, behind the same
+`require_admin_session` every other admin route uses, value-validated
+server-side). A new admin nav page, Season, shows the current value and
+one button per season.
+
+**Merchandising only, verified structurally, not just claimed:**
+`server/catalog_store.py::rail_seasonal` and the new
+`home-seasonal-{season}` rail in `/api/home` are the only places the
+active season touches server-side behavior beyond storage and display —
+neither is imported by, nor imports from, `server/features/`, `sim/`,
+or `eval/`; `import-linter`'s existing "features has no upward imports"
+contract stays green. The rail only appears when at least 6 items
+share the active season (`MIN_SEASONAL_RAIL_ITEMS`), falling back to
+the ordinary category rails otherwise — no padded or fabricated rail
+for a thin season, per the same "don't pad with poor matches"
+discipline as item 3.
+
+**Logged, not just settable:** `sessions.active_season` (schema-
+migrated via an idempotent `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`,
+the established no-migration-framework pattern already used for `IF NOT
+EXISTS` table creation) is set once, at session creation, from whatever
+the active season was at that moment, and never updated afterward —
+confirmed by a regression test that a later idempotent `ensure_session`
+call with a different season does not overwrite it. This is what makes
+"the effect on behavior measurable later" actually true rather than
+aspirational: a future analysis can group sessions by the season that
+was active when they started.
+
+**Verified live**, not just by tests: set the active season to Holiday
+in the real admin console, confirmed the "Holiday picks" rail appeared
+on the real home page with real items, confirmed the seasonal badge
+(indigo, distinct from the existing black "Best Seller" badge, no
+collision) rendered on both `ItemCard` and the product detail page for
+items tagged holiday, and confirmed `GET /api/season` reflects the
+change immediately for an unauthenticated request. Reset back to `none`
+afterward to leave the demo environment clean.
+
+247 -> 270 tests pass across items 1-4 combined this session, `tsc
+--noEmit` clean, oxlint's new warnings are the same already-accepted
+pattern classes (`only-export-components` for a context+hook pair,
+`set-state-in-effect` for a fetch-on-mount effect) already present
+throughout this codebase, not new categories, `import-linter` contract
+holds.

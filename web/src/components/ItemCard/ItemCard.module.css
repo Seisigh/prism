@@ -34,6 +34,21 @@
   z-index: 1;
 }
 
+.seasonalBadge {
+  position: absolute;
+  top: var(--sp-2);
+  right: var(--sp-2);
+  background: var(--primary);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  z-index: 1;
+}
+
 .sponsored {
   position: absolute;
   bottom: var(--sp-2);

@@ -72,6 +72,18 @@
   width: fit-content;
 }
 
+.seasonalBadge {
+  background: var(--primary);
+  color: var(--surface);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 3px 7px;
+  border-radius: var(--radius-sm);
+  width: fit-content;
+}
+
 .bulletList {
   display: flex;
   flex-direction: column;

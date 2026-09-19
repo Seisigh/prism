@@ -14,8 +14,10 @@ from uuid import UUID
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Response, WebSocket, WebSocketDisconnect
 
 from server.config import settings
+from server.features.signal_descriptions import SIGNAL_DESCRIPTIONS
 from server.ingest import admin_signals, admin_store
 from server.ingest.admin_auth import COOKIE_NAME, check_password, create_session_cookie_value, require_admin_session, verify_session_cookie
+from server.ingest.app_config import VALID_SEASONS, get_active_season, set_active_season
 from server.ingest.db import get_pg_pool, get_redis
 from server.ingest.live_scoring import _load_taste_state
 from server.ingest.store import get_session_events
@@ -80,6 +82,18 @@ async def session_signals(session_id: UUID):
     return {"session_id": str(session_id), "rows": rows}
 
 
+@router.get("/signal-registry", dependencies=[Depends(require_admin_session)])
+async def signal_registry():
+    # §6.7 legibility: served from server/features/signal_descriptions.py
+    # (the single source of truth, next to the signal functions it
+    # describes) rather than duplicated as frontend UI copy that could
+    # drift out of sync with what a signal actually computes.
+    return {
+        name: {"measures": d.measures, "higher": d.higher, "lower": d.lower, "unavailable_when": d.unavailable_when}
+        for name, d in SIGNAL_DESCRIPTIONS.items()
+    }
+
+
 @router.get("/signal-distributions", dependencies=[Depends(require_admin_session)])
 async def signal_distributions(limit_sessions: int = 50):
     pool = await get_pg_pool()
@@ -87,6 +101,22 @@ async def signal_distributions(limit_sessions: int = 50):
     session_ids = [s["session_id"] for s in sessions[:limit_sessions]]
     distributions = await admin_signals.get_signal_distributions(pool, session_ids)
     return {"n_sessions": len(session_ids), "distributions": distributions}
+
+
+@router.get("/season", dependencies=[Depends(require_admin_session)])
+async def get_season():
+    pool = await get_pg_pool()
+    return {"season": await get_active_season(pool), "valid_seasons": list(VALID_SEASONS)}
+
+
+@router.post("/season", dependencies=[Depends(require_admin_session)])
+async def set_season(body: dict):
+    season = body.get("season")
+    if season not in VALID_SEASONS:
+        raise HTTPException(status_code=400, detail=f"season must be one of {VALID_SEASONS}")
+    pool = await get_pg_pool()
+    await set_active_season(pool, season)
+    return {"ok": True, "season": season}
 
 
 @router.post("/new-profile", dependencies=[Depends(require_admin_session)])

@@ -176,6 +176,17 @@ class CatalogStore:
         pool.sort(key=self._score_score, reverse=True)
         return pool[:limit]
 
+    def rail_seasonal(self, season: str, limit: int = 12) -> list[dict]:
+        """Merchandising only (close-out item 4): items tagged with the
+        given season, most-popular first. Empty list for "none" or a
+        season with too few items to make a real rail -- the caller
+        decides the minimum and whether to show the rail at all."""
+        if season == "none":
+            return []
+        pool = [i for i in self.all_items if i.get("season") == season]
+        pool.sort(key=self._score_score, reverse=True)
+        return pool[:limit]
+
     def rail_similar_items(self, item: dict, limit: int = 12) -> list[dict]:
         pool = [
             i

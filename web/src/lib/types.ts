@@ -39,6 +39,7 @@ export interface CatalogItem {
   badges: string[]
   alt_text: string
   reviews: ReviewSnippet[]
+  season: 'spring' | 'summer' | 'fall' | 'winter' | 'holiday' | 'none'
 }
 
 export interface FacetCount {

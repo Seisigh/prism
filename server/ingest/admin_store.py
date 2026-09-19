@@ -32,7 +32,7 @@ async def list_sessions(
         """
         SELECT s.session_id, s.code, s.created_at, s.last_event_at, s.demo_opened,
                s.browser, s.engine_version, s.device_pixel_ratio, s.viewport_width,
-               s.viewport_height, s.pointer_type,
+               s.viewport_height, s.pointer_type, s.active_season,
                COUNT(*) FILTER (WHERE e.type = ANY($1::text[])) AS item_views,
                COUNT(*) FILTER (WHERE e.type = ANY($2::text[])) AS commitments,
                MIN(e.ts_mono) AS first_ts,

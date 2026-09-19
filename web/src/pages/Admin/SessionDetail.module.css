@@ -3,6 +3,43 @@
   background: var(--surface-alt);
 }
 
+.sortableHeader {
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.sortableHeader:hover {
+  color: var(--ink);
+}
+
+.sortIndicator {
+  display: inline-block;
+  min-width: 12px;
+  color: var(--primary);
+}
+
+.expandedItemHeader {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-4) var(--sp-4) 0;
+}
+
+.expandedThumb {
+  width: 56px;
+  height: 56px;
+  flex-shrink: 0;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+}
+
+.expandedTitle {
+  font-size: var(--fs-14);
+  font-weight: 600;
+  color: var(--ink);
+}
+
 .signalGrid {
   padding: var(--sp-4);
   display: grid;

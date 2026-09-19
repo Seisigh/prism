@@ -8,6 +8,7 @@ import { ProfilePanel } from './components/ProfilePanel/ProfilePanel'
 import { ReducedCaptureNotice } from './components/ReducedCaptureNotice/ReducedCaptureNotice'
 import { CartProvider } from './state/CartContext'
 import { PrismSDKProvider } from './state/PrismSDKContext'
+import { SeasonProvider } from './state/SeasonContext'
 import { useSession } from './state/SessionContext'
 import { WishlistProvider } from './state/WishlistContext'
 import { Cart } from './pages/Cart/Cart'
@@ -31,6 +32,7 @@ function App() {
 
   return (
     <PrismSDKProvider>
+      <SeasonProvider>
       <CartProvider>
         <WishlistProvider>
           <a href="#main" className="skip-link">
@@ -57,6 +59,7 @@ function App() {
           <ProfilePanel open={profileOpen} onClose={() => setProfileOpen(false)} />
         </WishlistProvider>
       </CartProvider>
+      </SeasonProvider>
     </PrismSDKProvider>
   )
 }

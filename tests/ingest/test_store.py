@@ -114,3 +114,22 @@ async def test_payload_roundtrips_as_a_dict_not_a_json_string():
     assert events[0]["payload"] == {"nested": {"a": 1}}
 
     await delete_sessions_by_code(pool, code)
+
+
+async def test_ensure_session_logs_the_active_season_at_creation(monkeypatch):
+    """Close-out item 4: the season active when a session starts is
+    logged once, for later measurement -- never updated afterward."""
+    pool = await _pool_or_skip()
+    session_id = uuid.uuid4()
+    code = f"test-{uuid.uuid4().hex[:8]}"
+    await ensure_session(pool, session_id, code, active_season="holiday")
+
+    row = await pool.fetchrow("SELECT active_season FROM sessions WHERE session_id = $1", session_id)
+    assert row["active_season"] == "holiday"
+
+    # A later idempotent call (a real retry/reconnect) must not overwrite it.
+    await ensure_session(pool, session_id, code, active_season="winter")
+    row = await pool.fetchrow("SELECT active_season FROM sessions WHERE session_id = $1", session_id)
+    assert row["active_season"] == "holiday"
+
+    await delete_sessions_by_code(pool, code)

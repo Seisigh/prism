@@ -81,6 +81,37 @@ def generate_review_count(rng: random.Random) -> int:
     return rng.randint(20000, 60000)
 
 
+# Season is a merchandising attribute only (close-out item 4): which
+# rail an item surfaces on and whether it gets a seasonal badge. It must
+# never reach the feature pipeline, ItemContext, or the ranker — see
+# server/features/ (no import of this module or catalog/ anywhere there,
+# enforced by the same import-linter contract that already keeps
+# `ingest`/`models`/`recommender` out). Most items aren't seasonal at
+# all; a handful of categories get a modest bias toward the season their
+# real-world equivalent actually skews toward, everything else is
+# uniform across the five real seasons.
+_SEASON_BIAS: dict[str, dict[str, float]] = {
+    "Outdoor & Garden": {"spring": 0.30, "summer": 0.35, "fall": 0.10, "winter": 0.05, "holiday": 0.05},
+    "Sports & Fitness": {"spring": 0.20, "summer": 0.30, "fall": 0.15, "winter": 0.10, "holiday": 0.05},
+    "Travel & Luggage": {"spring": 0.15, "summer": 0.35, "fall": 0.10, "winter": 0.10, "holiday": 0.10},
+    "Lighting": {"spring": 0.05, "summer": 0.05, "fall": 0.10, "winter": 0.15, "holiday": 0.35},
+    "Toys & Games": {"spring": 0.05, "summer": 0.10, "fall": 0.05, "winter": 0.10, "holiday": 0.45},
+    "Jewelry & Accessories": {"spring": 0.05, "summer": 0.05, "fall": 0.05, "winter": 0.10, "holiday": 0.35},
+    "Bed & Bath": {"spring": 0.10, "summer": 0.10, "fall": 0.15, "winter": 0.30, "holiday": 0.05},
+}
+_SEASON_NONE_RATE = 0.55  # most items are not seasonal at all
+_SEASONS = ("spring", "summer", "fall", "winter", "holiday")
+_DEFAULT_SEASON_WEIGHTS = {s: 1.0 / len(_SEASONS) for s in _SEASONS}
+
+
+def generate_season(category: str, rng: random.Random) -> str:
+    if rng.random() < _SEASON_NONE_RATE:
+        return "none"
+    weights = _SEASON_BIAS.get(category, _DEFAULT_SEASON_WEIGHTS)
+    seasons = list(weights.keys())
+    return rng.choices(seasons, weights=list(weights.values()), k=1)[0]
+
+
 def generate_stock(rng: random.Random) -> tuple[str, str | None]:
     roll = rng.random()
     if roll < 0.03:

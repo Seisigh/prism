@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import type { CatalogItem } from '../../lib/types'
 import { usePrismSDK } from '../../state/PrismSDKContext'
+import { useActiveSeason } from '../../state/SeasonContext'
 import { useWishlist } from '../../state/WishlistContext'
 import { Price } from '../Price/Price'
 import { ProductImage } from '../ProductImage/ProductImage'
@@ -15,11 +16,21 @@ interface ItemCardProps {
   eagerImage?: boolean
 }
 
+const SEASON_LABELS: Record<string, string> = {
+  spring: 'Spring',
+  summer: 'Summer',
+  fall: 'Fall',
+  winter: 'Winter',
+  holiday: 'Holiday',
+}
+
 export function ItemCard({ item, sponsored = false, eagerImage = false }: ItemCardProps) {
   const { has, toggle } = useWishlist()
   const wishlisted = has(item.item_id)
   const sdk = usePrismSDK()
   const cardRef = useRef<HTMLElement>(null)
+  const activeSeason = useActiveSeason()
+  const showSeasonalBadge = item.season !== 'none' && item.season === activeSeason
 
   useEffect(() => {
     if (!sdk || !cardRef.current) return
@@ -32,6 +43,7 @@ export function ItemCard({ item, sponsored = false, eagerImage = false }: ItemCa
     <article ref={cardRef} className={styles.card} data-item-id={item.item_id}>
       <div className={styles.imageWrap}>
         {item.badges[0] ? <span className={styles.badge}>{item.badges[0]}</span> : null}
+        {showSeasonalBadge ? <span className={styles.seasonalBadge}>{SEASON_LABELS[item.season]}</span> : null}
         {sponsored ? <span className={styles.sponsored}>Sponsored</span> : null}
         <button
           type="button"

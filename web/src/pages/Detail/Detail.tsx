@@ -10,10 +10,19 @@ import { detail, reviewMarker } from '../../copy'
 import { api } from '../../lib/api'
 import type { CatalogItem, Rail } from '../../lib/types'
 import { usePrismSDK } from '../../state/PrismSDKContext'
+import { useActiveSeason } from '../../state/SeasonContext'
 import { useCart } from '../../state/CartContext'
 import { useWishlist } from '../../state/WishlistContext'
 import { NotFound } from '../NotFound/NotFound'
 import styles from './Detail.module.css'
+
+const SEASON_LABELS: Record<string, string> = {
+  spring: 'Spring',
+  summer: 'Summer',
+  fall: 'Fall',
+  winter: 'Winter',
+  holiday: 'Holiday',
+}
 
 export function Detail() {
   const { itemId = '' } = useParams()
@@ -25,6 +34,7 @@ export function Detail() {
   const { has, toggle } = useWishlist()
   const sdk = usePrismSDK()
   const heroRef = useRef<HTMLDivElement>(null)
+  const activeSeason = useActiveSeason()
 
   useEffect(() => {
     setItem(null)
@@ -78,6 +88,7 @@ export function Detail() {
   const stockClass =
     item.stock_status === 'in_stock' ? styles.inStock : item.stock_status === 'low_stock' ? styles.low : styles.out
   const wishlisted = has(item.item_id)
+  const showSeasonalBadge = item.season !== 'none' && item.season === activeSeason
   const ratingCounts = [5, 4, 3, 2, 1].map((star) => {
     // Deterministic distribution shaped around the item's rating, purely
     // for the histogram display — the review objects themselves are the
@@ -107,9 +118,10 @@ export function Detail() {
         </div>
 
         <div className={styles.infoCol}>
-          {item.badges[0] ? (
+          {item.badges[0] || showSeasonalBadge ? (
             <div className={styles.badgeRow}>
-              <span className={styles.badge}>{item.badges[0]}</span>
+              {item.badges[0] ? <span className={styles.badge}>{item.badges[0]}</span> : null}
+              {showSeasonalBadge ? <span className={styles.seasonalBadge}>{SEASON_LABELS[item.season]}</span> : null}
             </div>
           ) : null}
           <span className={styles.brand}>{item.brand}</span>

@@ -20,6 +20,7 @@ from catalog.synth_attributes import (
     generate_rating,
     generate_review_count,
     generate_review_texts,
+    generate_season,
     generate_shipping_line,
     generate_stock,
     maybe_anchor_price_cents,
@@ -141,6 +142,7 @@ def _assemble_item(
     review_count = set_anchor["review_count"] if set_anchor else generate_review_count(rng)
     stock_status, stock_label = generate_stock(rng)
     shipping_line = generate_shipping_line(rng)
+    season = generate_season(candidate.type_info.category, rng)
 
     badges: list[str] = []
     if rating >= 4.4 and rng.random() < 0.08:
@@ -182,6 +184,7 @@ def _assemble_item(
         badges=badges,
         alt_text=f"{title} product photo",
         reviews=reviews,
+        season=season,
         _source_item_id=candidate.source_item_id,
         _product_type=candidate.product_type,
     )

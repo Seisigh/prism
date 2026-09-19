@@ -44,6 +44,22 @@ async def _client():
     return AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver")
 
 
+async def test_admin_responses_are_never_cached():
+    """Real bug found live: a stale browser-cached response for
+    /api/admin/signal-registry kept overriding live data on a later
+    fetch(), even though curl and a fresh navigation both got the
+    current response. Every /api/admin/* response must say so."""
+    async with await _client() as client:
+        resp = await client.get("/api/admin/whoami")
+        assert resp.headers.get("cache-control") == "no-store"
+
+
+async def test_non_admin_responses_are_not_forced_no_store():
+    async with await _client() as client:
+        resp = await client.get("/api/season")
+        assert resp.headers.get("cache-control") != "no-store"
+
+
 async def test_whoami_unauthenticated():
     async with await _client() as client:
         resp = await client.get("/api/admin/whoami")
@@ -117,6 +133,8 @@ async def test_new_profile_requires_authentication():
         ("GET", "/api/admin/sessions"),
         ("GET", "/api/admin/sessions/00000000-0000-0000-0000-000000000000/signals"),
         ("GET", "/api/admin/signal-distributions"),
+        ("GET", "/api/admin/signal-registry"),
+        ("GET", "/api/admin/season"),
         ("POST", "/api/admin/new-profile"),
     ],
 )
@@ -124,6 +142,68 @@ async def test_every_admin_endpoint_requires_authentication(method, path):
     async with await _client() as client:
         resp = await client.request(method, path)
         assert resp.status_code == 401
+
+
+async def test_signal_registry_matches_the_real_signal_set_once_authenticated():
+    from server.features.signals import SIGNAL_REGISTRY
+    from server.features.signals_directional import DIRECTIONAL_SIGNAL_REGISTRY
+    from server.features.signals_gate1 import GATE1_SIGNAL_REGISTRY
+
+    all_signals = {**SIGNAL_REGISTRY, **GATE1_SIGNAL_REGISTRY, **DIRECTIONAL_SIGNAL_REGISTRY}
+    async with await _client() as client:
+        login_resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        client.cookies.set(COOKIE_NAME, login_resp.cookies[COOKIE_NAME])
+        resp = await client.get("/api/admin/signal-registry")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert set(body.keys()) == set(all_signals.keys())
+        for entry in body.values():
+            assert set(entry.keys()) == {"measures", "higher", "lower", "unavailable_when"}
+
+
+async def test_set_season_requires_authentication():
+    async with await _client() as client:
+        resp = await client.post("/api/admin/season", json={"season": "summer"})
+        assert resp.status_code == 401
+
+
+async def test_season_get_set_round_trip_once_authenticated():
+    await _pg_or_skip()
+    async with await _client() as client:
+        login_resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        client.cookies.set(COOKIE_NAME, login_resp.cookies[COOKIE_NAME])
+
+        resp = await client.post("/api/admin/season", json={"season": "holiday"})
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True, "season": "holiday"}
+
+        resp = await client.get("/api/admin/season")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["season"] == "holiday"
+        assert set(body["valid_seasons"]) == {"spring", "summer", "fall", "winter", "holiday", "none"}
+
+        # Restore the default so this test doesn't leak state into others.
+        await client.post("/api/admin/season", json={"season": "none"})
+
+
+async def test_set_season_rejects_an_invalid_value_once_authenticated():
+    async with await _client() as client:
+        login_resp = await client.post("/api/admin/login", json={"password": "test-password-123"})
+        client.cookies.set(COOKIE_NAME, login_resp.cookies[COOKIE_NAME])
+        resp = await client.post("/api/admin/season", json={"season": "not_a_real_season"})
+        assert resp.status_code == 400
+
+
+async def test_public_season_endpoint_needs_no_authentication():
+    # /api/season lives on the storefront app (server/main.py) -- covered
+    # directly against the real app instance rather than the admin-only
+    # _client() helper, since this one must work with zero cookies.
+    await _pg_or_skip()
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+        resp = await client.get("/api/season")
+        assert resp.status_code == 200
+        assert resp.json()["season"] in {"spring", "summer", "fall", "winter", "holiday", "none"}
 
 
 def test_live_view_websocket_rejects_without_a_session_cookie():

@@ -25,13 +25,18 @@ async def ensure_session(
     session_id: UUID,
     code: str,
     device: dict | None = None,
+    active_season: str | None = None,
 ) -> None:
+    """`active_season` is logged once, at first creation, and never
+    updated on a later idempotent call -- it's a record of what was
+    active when this session *started* (close-out item 4), not a live
+    field. `ON CONFLICT DO NOTHING` already gives us that for free."""
     device = device or {}
     await pool.execute(
         """
         INSERT INTO sessions (session_id, code, browser, engine_version, device_pixel_ratio,
-                               viewport_width, viewport_height, pointer_type)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                               viewport_width, viewport_height, pointer_type, active_season)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (session_id) DO NOTHING
         """,
         session_id,
@@ -42,6 +47,7 @@ async def ensure_session(
         device.get("viewport_width"),
         device.get("viewport_height"),
         device.get("pointer_type"),
+        active_season,
     )
 
 

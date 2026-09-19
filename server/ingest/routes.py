@@ -13,6 +13,7 @@ from pydantic import ValidationError
 
 from server.catalog_store import get_store
 from server.features.replay import recompute_session
+from server.ingest.app_config import get_active_season
 from server.ingest.db import get_pg_pool, get_redis
 from server.ingest.envelope import Envelope
 from server.ingest.live_scoring import score_session_update
@@ -78,7 +79,7 @@ async def telemetry_ws(websocket: WebSocket, session_id: UUID = Query(...), code
     await websocket.accept()
     pool = await get_pg_pool()
     r = get_redis()
-    await ensure_session(pool, session_id, code=code)
+    await ensure_session(pool, session_id, code=code, active_season=await get_active_season(pool))
     try:
         while True:
             raw = await websocket.receive_json()
@@ -103,7 +104,7 @@ async def post_events(raw: list[dict], session_id: UUID = Query(...), code: str 
     pool = await get_pg_pool()
     envelopes = _parse_batch(raw[:MAX_BATCH_SIZE])
     if envelopes:
-        await ensure_session(pool, session_id, code=code)
+        await ensure_session(pool, session_id, code=code, active_season=await get_active_season(pool))
         await insert_events(pool, envelopes, get_redis())
         await _capture_device_info(pool, envelopes)
     return {"accepted": len(envelopes)}

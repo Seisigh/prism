@@ -17,6 +17,8 @@ from fastapi.staticfiles import StaticFiles
 from server.catalog_store import get_store
 from server.config import settings
 from server.ingest.admin_routes import router as admin_router
+from server.ingest.app_config import get_active_season
+from server.ingest.db import get_pg_pool
 from server.ingest.routes import router as ingest_router
 
 WEB_DIST = Path(__file__).resolve().parent.parent / "web" / "dist"
@@ -37,6 +39,21 @@ async def noindex_header(request, call_next):
     # depth alongside the HTML <meta name="robots"> tag the SPA renders.
     response = await call_next(request)
     response.headers["X-Robots-Tag"] = "noindex, nofollow"
+    return response
+
+
+@app.middleware("http")
+async def admin_no_cache_header(request, call_next):
+    # Real bug found live (close-out item 2/4 review): a GET to
+    # /api/admin/* with no explicit Cache-Control could be served stale
+    # from the browser's HTTP cache on a later `fetch()` -- reproduced
+    # directly, a stale cached response kept overriding a live one that
+    # curl and a fresh navigation both returned correctly. Every /api/
+    # admin/* response is live, mutable data (sessions, the signal
+    # registry, the active season) an operator must never see stale.
+    response = await call_next(request)
+    if request.url.path.startswith("/api/admin/"):
+        response.headers["Cache-Control"] = "no-store"
     return response
 
 
@@ -176,11 +193,45 @@ def autocomplete(q: str = ""):
     return {"suggestions": store.autocomplete(q)}
 
 
+SEASON_RAIL_TITLES = {
+    "spring": "Spring picks",
+    "summer": "Summer picks",
+    "fall": "Fall picks",
+    "winter": "Winter picks",
+    "holiday": "Holiday picks",
+}
+MIN_SEASONAL_RAIL_ITEMS = 6
+
+
+@app.get("/api/season")
+async def active_season():
+    # Public, read-only -- the storefront needs this to badge items and
+    # pick the seasonal rail without going through admin auth. Setting it
+    # is admin-only (POST /api/admin/season).
+    pool = await get_pg_pool()
+    return {"season": await get_active_season(pool)}
+
+
 @app.get("/api/home")
-def home():
+async def home():
     store = get_store()
     top_categories = store.home_categories(limit=8)
     rails = []
+
+    pool = await get_pg_pool()
+    season = await get_active_season(pool)
+    if season in SEASON_RAIL_TITLES:
+        seasonal_items = store.rail_seasonal(season, limit=12)
+        if len(seasonal_items) >= MIN_SEASONAL_RAIL_ITEMS:
+            rails.append(
+                {
+                    "rail_id": f"home-seasonal-{season}",
+                    "policy_id": "seasonal_merchandising",
+                    "title": SEASON_RAIL_TITLES[season],
+                    "items": seasonal_items,
+                }
+            )
+
     for cat in top_categories[:4]:
         items = store.rail_popular_in_category(cat, exclude_id=None, limit=12)
         rails.append({"rail_id": f"home-{cat}", "policy_id": "popularity_fallback", "title": cat, "items": items})
